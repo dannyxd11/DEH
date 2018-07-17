@@ -27,3 +27,6 @@
         }
       }
     };
+mocha: {
+    enableTimeouts: false
+}

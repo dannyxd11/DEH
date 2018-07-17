@@ -1,14 +1,21 @@
+var Coin = artifacts.require('./Coin.sol');
 var DEH = artifacts.require("DEH");
-var Coin = artifacts.require("Coin");
+const truffleAssert = require('truffle-assertions');
+const jsonrpc = '2.0'
+const id = 0;
+const send = (method, params = []) =>  web3.currentProvider.send({ id, jsonrpc, method, params })
+const printEvents = false;
 
 contract('Coin', async (accounts) => {
     const account_owner = accounts[0];
     const account_one = accounts[1];
     const account_two = accounts[2];
+    const validator = accounts[9];
     const deh = await DEH.deployed();
-
-    it("Should be able to deploy contract and minter should be able to allocate Coin tokens", async () => {		
-        let coin = await Coin.new(deh.address, {from : account_owner});
+    // let coin = await Coin.new(deh.address, {from : account_owner});
+    
+    it("Should be able to deploy contract and minter should be able to allocate Coin tokens", async () => {		        
+        let coin = await Coin.deployed();
         let transferAmount = web3.toWei(0.02,'ether');
 
         let account_one_starting_balance = await coin.checkBalance.call({ from:account_one });
@@ -23,6 +30,185 @@ contract('Coin', async (accounts) => {
         assert.equal(account_one_ending_balance, account_one_starting_balance + parseInt(transferAmount), "Amount was not correctly minted");
     });
 
+    it("Should be able to transfer tokens from account one to account two", async () => {	
+        let coin = await Coin.deployed();	        
+        let transferAmount = web3.toWei(0.02,'ether');
+
+        let account_one_starting_balance = await coin.checkBalance.call({ from:account_one });
+        account_one_starting_balance = account_one_starting_balance.toNumber();
+        let account_two_starting_balance = await coin.checkBalance.call({ from:account_two });
+		account_two_starting_balance = account_two_starting_balance.toNumber();
+
+        let resp = await coin.transfer(account_two, transferAmount, {from: account_one});
+        let gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+        
+        let account_one_ending_balance = await coin.checkBalance.call({ from:account_one });
+        account_one_ending_balance = account_one_ending_balance.toNumber();
+        let account_two_ending_balance = await coin.checkBalance.call({ from:account_two });
+		account_two_ending_balance = account_two_ending_balance.toNumber();
+
+
+        assert.equal(account_one_ending_balance, account_one_starting_balance - parseInt(transferAmount), "Amount was not correctly deducted from sender");
+        assert.equal(account_two_ending_balance, account_two_starting_balance + parseInt(transferAmount), "Amount was not correctly added to recipient");
+    });
+
+    it("Should be able to sell tokens. Ether will be transfered to the DEH and withdrawn after grace period.", async () => {	
+        let coin = await Coin.deployed();	        
+        let transferAmount = web3.toWei(0.01,'ether');
+
+        let account_two_starting_balance = await web3.eth.getBalance(account_two);
+        account_two_starting_balance = account_two_starting_balance.toNumber();
+        let account_two_starting_token_balance = await coin.checkBalance.call({ from:account_two });
+		account_two_starting_token_balance = account_two_starting_token_balance.toNumber();
+        let deh_start_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_start_withdrawable_balance = deh_start_withdrawable_balance.toNumber();
+
+        let resp = await coin.sell(transferAmount, {from: account_two});
+        let gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+        
+        let account_two_ending_balance = await web3.eth.getBalance(account_two);
+        account_two_ending_balance = account_two_ending_balance.toNumber();
+        let account_two_ending_token_balance = await coin.checkBalance.call({ from:account_two });
+		account_two_ending_token_balance = account_two_ending_token_balance.toNumber();
+        let deh_end_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_end_withdrawable_balance = deh_end_withdrawable_balance.toNumber();
+
+        assert.closeTo(account_two_ending_balance, account_two_starting_balance - gascost, 20000, "Amount was sent directly to withdrawer, or unexpected transfer costs.");
+        assert.equal(account_two_ending_token_balance, account_two_starting_token_balance - parseInt(transferAmount), "Amount was not correctly deducted from token balance");      
+        assert.equal(deh_end_withdrawable_balance, deh_start_withdrawable_balance + parseInt(transferAmount), "Amount was not correctly credited to DEH");
+
+        account_two_starting_balance = await web3.eth.getBalance(account_two);
+        account_two_starting_balance = account_two_starting_balance.toNumber();        
+        deh_start_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_start_withdrawable_balance = deh_start_withdrawable_balance.toNumber();
+
+        resp = await deh.withdraw(coin.address, {from: account_two});
+        gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+
+        account_two_ending_balance = await web3.eth.getBalance(account_two);
+        account_two_ending_balance = account_two_ending_balance.toNumber();        
+        deh_end_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_end_withdrawable_balance = deh_end_withdrawable_balance.toNumber();
+
+        assert.closeTo(account_two_ending_balance, account_two_starting_balance - gascost, 20000, "Amount was withdrawn whilst in grace period");        
+        assert.equal(deh_end_withdrawable_balance, deh_start_withdrawable_balance, "Amount was not correctly credited to DEH");
+        
+        //Forward Time
+		await send('evm_increaseTime', [10800]);
+		await send('evm_mine');
+
+        account_two_starting_balance = await web3.eth.getBalance(account_two);
+        account_two_starting_balance = account_two_starting_balance.toNumber();        
+        deh_start_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_start_withdrawable_balance = deh_start_withdrawable_balance.toNumber();
+
+        resp = await deh.withdraw(coin.address, {from: account_two});
+        gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+
+        account_two_ending_balance = await web3.eth.getBalance(account_two);
+        account_two_ending_balance = account_two_ending_balance.toNumber();        
+        deh_end_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_end_withdrawable_balance = deh_end_withdrawable_balance.toNumber();
+
+        assert.closeTo(account_two_ending_balance, account_two_starting_balance - gascost + parseInt(transferAmount), 20000, "Amount was withdrawn whilst in grace period");        
+        assert.equal(deh_end_withdrawable_balance, deh_start_withdrawable_balance - parseInt(transferAmount), "Amount was not correctly credited to DEH");
+        assert.equal(deh_end_withdrawable_balance, 0, "DEH was not emptied on withdraw");
+        
+    }).timeout(40000); 
+
+    it("Should be able to sell tokens. Validators Delay the process", async () => {	
+        let coin = await Coin.deployed();	        
+        let transferAmount = web3.toWei(0.01,'ether');
+
+        let account_two_starting_balance = await web3.eth.getBalance(account_two);
+        account_two_starting_balance = account_two_starting_balance.toNumber();
+        let account_two_starting_token_balance = await coin.checkBalance.call({ from:account_two });
+		account_two_starting_token_balance = account_two_starting_token_balance.toNumber();
+        let deh_start_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_start_withdrawable_balance = deh_start_withdrawable_balance.toNumber();
+
+        assert.equal(account_two_starting_token_balance, parseInt(web3.toWei(0.01,'ether')), "Insufficient amount of tokens");      
+
+        let resp = await coin.sell(transferAmount, {from: account_two});
+        let gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+        if(printEvents){truffleAssert.prettyPrintEmittedEvents(resp);}
+
+        let account_two_ending_balance = await web3.eth.getBalance(account_two);
+        account_two_ending_balance = account_two_ending_balance.toNumber();
+        let account_two_ending_token_balance = await coin.checkBalance.call({ from:account_two });
+		account_two_ending_token_balance = account_two_ending_token_balance.toNumber();
+        let deh_end_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_end_withdrawable_balance = deh_end_withdrawable_balance.toNumber();
+
+        assert.closeTo(account_two_ending_balance, account_two_starting_balance - gascost, 20000, "Amount was sent directly to withdrawer, or unexpected transfer costs.");
+        assert.equal(account_two_ending_token_balance, account_two_starting_token_balance - parseInt(transferAmount), "Amount was not correctly deducted from token balance");      
+        assert.equal(deh_end_withdrawable_balance, deh_start_withdrawable_balance + parseInt(transferAmount), "Amount was not correctly credited to DEH");
+
+        account_two_starting_balance = await web3.eth.getBalance(account_two);
+        account_two_starting_balance = account_two_starting_balance.toNumber();        
+        deh_start_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_start_withdrawable_balance = deh_start_withdrawable_balance.toNumber();
+
+        resp = await deh.withdraw(coin.address, {from: account_two});
+        gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+        if(printEvents){truffleAssert.prettyPrintEmittedEvents(resp);}
+
+        account_two_ending_balance = await web3.eth.getBalance(account_two);
+        account_two_ending_balance = account_two_ending_balance.toNumber();        
+        deh_end_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_end_withdrawable_balance = deh_end_withdrawable_balance.toNumber();
+
+        assert.closeTo(account_two_ending_balance, account_two_starting_balance - gascost, 20000, "Amount was withdrawn whilst in grace period");        
+        assert.equal(deh_end_withdrawable_balance, deh_start_withdrawable_balance, "Amount was not correctly credited to DEH");
+        
+        // Validator Delay
+		resp = await deh.delayPayments(coin.address, {from: validator});
+		let val_gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+        if(printEvents){truffleAssert.prettyPrintEmittedEvents(resp);}
+
+		// Forward Time To past Default 
+
+		await send('evm_increaseTime', [10800 + 12*60*60]);
+        await send('evm_mine');
+        
+        account_two_starting_balance = await web3.eth.getBalance(account_two);
+        account_two_starting_balance = account_two_starting_balance.toNumber();        
+        deh_start_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_start_withdrawable_balance = deh_start_withdrawable_balance.toNumber();
+
+        resp = await deh.withdraw(coin.address, {from: account_two});
+        gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+        if(printEvents){truffleAssert.prettyPrintEmittedEvents(resp);}
+
+        account_two_ending_balance = await web3.eth.getBalance(account_two);
+        account_two_ending_balance = account_two_ending_balance.toNumber();        
+        deh_end_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_end_withdrawable_balance = deh_end_withdrawable_balance.toNumber();
+        
+        assert.equal(deh_end_withdrawable_balance, deh_start_withdrawable_balance, "Amount was not correctly credited to DEH");
+        assert.closeTo(account_two_ending_balance, account_two_starting_balance - gascost, 20000, "Amount was withdrawn whilst in grace period");        
+        
+        await send('evm_increaseTime', [14*60*60]);
+        await send('evm_mine');
+
+        account_two_starting_balance = await web3.eth.getBalance(account_two);
+        account_two_starting_balance = account_two_starting_balance.toNumber();        
+        deh_start_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_start_withdrawable_balance = deh_start_withdrawable_balance.toNumber();
+
+        resp = await deh.withdraw(coin.address, {from: account_two});
+        gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+
+        account_two_ending_balance = await web3.eth.getBalance(account_two);
+        account_two_ending_balance = account_two_ending_balance.toNumber();        
+        deh_end_withdrawable_balance = await deh.checkWithdrawable.call(coin.address,{from: account_two});
+        deh_end_withdrawable_balance = deh_end_withdrawable_balance.toNumber();
+
+        assert.closeTo(account_two_ending_balance, account_two_starting_balance - gascost + parseInt(transferAmount), 20000, "Amount was withdrawn whilst in grace period");        
+        assert.equal(deh_end_withdrawable_balance, deh_start_withdrawable_balance - parseInt(transferAmount), "Amount was not correctly credited to DEH");
+        assert.equal(deh_end_withdrawable_balance, 0, "DEH was not emptied on withdraw");
+        
+    }).timeout(40000); 
 
     //todo Test to make sure only owner can mint
 

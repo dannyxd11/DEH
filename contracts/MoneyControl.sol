@@ -26,7 +26,7 @@ contract MoneyControl{
         address recovered = ecrecover(hash, v, r, s);
         emit PrintRecovered(recovered, recovery);
         if(recovered == recovery){
-            bytes32 calculatedHash = keccak256(addr);
+            bytes32 calculatedHash = keccak256(toBytes(addr));
             emit PreHash(abi.encodePacked("\x19Ethereum Signed Message:\n20", addr));
             if(calculatedHash == hash){
                 emit PerformingRecovery(addr);
@@ -61,5 +61,14 @@ contract MoneyControl{
     // Below abstract instructions to be implemented in child contract
     function failsafe() public returns(bool); 
     function init_recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v) public recoveryInitCheck(addr, hash, r, s, v) returns (bool);
+
+    function toBytes(address a) private pure returns (bytes b){
+        assembly {
+            let m := mload(0x40)
+            mstore(add(m, 20), xor(0x140000000000000000000000000000000000000000, a))
+            mstore(0x40, add(m, 52))
+            b := m
+        }
+    }
 }
 

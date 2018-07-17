@@ -1,5 +1,5 @@
 pragma solidity ^0.4.21;
-import "MoneyControl.sol";
+import "./MoneyControl.sol";
 
 // melonport 
 // securify
@@ -24,7 +24,7 @@ contract Coin is MoneyControl{
     }
     
     function sell(uint ammountToSell) public returns(bool){
-        if(ammountToSell < balances[msg.sender]){
+        if(ammountToSell <= balances[msg.sender]){
             balances[msg.sender] = balances[msg.sender] - ammountToSell;
             return transferViaDEH(msg.sender, ammountToSell);
         }
@@ -35,10 +35,10 @@ contract Coin is MoneyControl{
         return balances[msg.sender];
     }
 
-    function send(address receiver, uint amount) public {
+    function transfer(address receiver, uint amount) public {
         if (balances[msg.sender] < amount) return;
-        balances[msg.sender] -= amount;
-        balances[receiver] += amount;
+        balances[msg.sender] = SafeMath.sub(balances[msg.sender], amount);
+        balances[receiver] = SafeMath.add(balances[receiver], amount);
         emit Sent(msg.sender, receiver, amount);
     }
     
