@@ -4,6 +4,7 @@ const jsonrpc = '2.0'
 const id = 0;
 const send = (method, params = []) =>  web3.currentProvider.send({ id, jsonrpc, method, params })
 const printEvents = false;
+
 contract('DEH', async (accounts) => {
 	
   it("DEH should be able to accept funds from contract/account", async () => {		
@@ -301,9 +302,7 @@ contract('DEH', async (accounts) => {
 		account_one_ending_balance = await web3.eth.getBalance(account_one);
 		account_one_ending_balance = account_one_ending_balance.toNumber();
 
-		assert.closeTo(account_one_ending_balance, account_one_starting_balance - acc1_gascost, 20000, "Was not able to withdraw balance after delay period");
-	//	assert.closeTo(account_two_ending_balance, account_two_starting_balance - acc2_gascost + account_two_withdrawable_balance_start, 20000, "Account 2 did not receive funds after delay period");	
-	
+		assert.closeTo(account_one_ending_balance, account_one_starting_balance - acc1_gascost, 20000, "Was not able to withdraw balance after delay period");	
 	});
 
 })

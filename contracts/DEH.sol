@@ -3,31 +3,37 @@ pragma solidity ^0.4.21;
 import "./SafeMath.sol";
 
 contract DEH {
-    mapping(address => mapping(address => Withdrawable)) payouts;
+    mapping(address => PendingPayments) payouts;
     mapping(address => ContractDelay) delayPeriods;
-    
-    uint defaultDelayPeriod = 10800;
+    using SafeMath for uint256;
+    uint256 defaultDelayPeriod = 10800;
     
     // todo - method for MC to reset graceperiod after 'panic' mode.
     // todo - method to prevent a single validator from DOSing
     
-    event Deposit(address contractAddress, address recipient, uint value);
-    event Withdrawal(address contractAddress, address recipient, uint value);
-    event DelayTriggered(address contractAddress, uint delayAmount, address validator);
+    event Deposit(address contractAddress, address recipient, uint256 value);
+    event Withdrawal(address contractAddress, address recipient, uint256 value);
+    event DelayTriggered(address contractAddress, uint256 delayAmount, address validator);
     event EarlyWithdrawalAttempt(address contractAddress, address recipient);
-    event PaymentCancelled(address contractAddress, address recipient, uint value);
-    event Timestamps(uint scheduled, uint check, uint _now);
-
+    event PaymentCancelled(address contractAddress, address recipient, uint256 value);
+    event Timestamps(uint256 scheduled, uint256 check, uint256 _now);
+    
     struct Withdrawable{
-        uint amount;
-        uint timestamp;
+        uint256 amount;
+        uint256 timestamp;
+        uint256 index;
     }
     
     struct ContractDelay{
-        uint period;
-        uint resetTime;
+        uint256 period;
+        uint256 resetTime;
     }
     
+    struct PendingPayments{
+        address[] pendingAddresses;
+        mapping(address => Withdrawable) pendingPayments;
+    }
+
     modifier onlyValidators(){
         _; // ToDo (Attribute Based Signatures?)
     }
@@ -43,11 +49,11 @@ contract DEH {
     }
     
     function withdraw(address contractAddress) public returns(bool){    
-        if(payouts[contractAddress][msg.sender].amount > 0){
-            if(SafeMath.add(payouts[contractAddress][msg.sender].timestamp,checkTimeWindow(contractAddress)) < now ){
-                emit Timestamps(payouts[contractAddress][msg.sender].timestamp, checkTimeWindow(contractAddress), now);
-                uint ammountToTransfer = payouts[contractAddress][msg.sender].amount;
-                payouts[contractAddress][msg.sender].amount = 0;
+        if(payouts[contractAddress].pendingPayments[msg.sender].amount > 0){
+            if(payouts[contractAddress].pendingPayments[msg.sender].timestamp.add(checkTimeWindow(contractAddress)) < now ){
+                emit Timestamps(payouts[contractAddress].pendingPayments[msg.sender].timestamp, checkTimeWindow(contractAddress), now);
+                uint256 ammountToTransfer = payouts[contractAddress].pendingPayments[msg.sender].amount;
+                emptyAccount(contractAddress, msg.sender);                
                 emit Withdrawal(contractAddress, msg.sender, ammountToTransfer);
                 msg.sender.transfer(ammountToTransfer);
                 return true;
@@ -57,32 +63,63 @@ contract DEH {
         return false;
     }
     
-    function checkWithdrawable(address contractAddress) public view returns(uint){
-        return payouts[contractAddress][msg.sender].amount;
+    function checkWithdrawable(address contractAddress) public view returns(uint256){
+        return payouts[contractAddress].pendingPayments[msg.sender].amount;
     }
+
+    function checkWithdrawableAsContract(address recipient) public view returns(uint256){
+        return payouts[msg.sender].pendingPayments[recipient].amount;
+    }
+
+    function pendingPayments() public view returns(address[]){
+        return payouts[msg.sender].pendingAddresses;
+    }
+
     
     function deposit(address recipient) public payable returns(bool){ // Decide if contractAddress is needed here
-        payouts[msg.sender][recipient].amount = SafeMath.add(payouts[msg.sender][recipient].amount, msg.value);
-        payouts[msg.sender][recipient].timestamp = now;
+        uint256 index = payouts[msg.sender].pendingAddresses.push(recipient);
+        payouts[msg.sender].pendingPayments[recipient].amount = payouts[msg.sender].pendingPayments[recipient].amount.add(msg.value);
+        payouts[msg.sender].pendingPayments[recipient].timestamp = now;
+        payouts[msg.sender].pendingPayments[recipient].index = index - 1;
         emit Deposit(msg.sender, msg.sender, msg.value);
         return true;
     }
     
     function delayPayments(address contractAddress) public onlyValidators returns(bool){
-        uint delay = 60*60*24;
+        uint256 delay = 60*60*24;
         delayPeriods[contractAddress].period = delay;
-        delayPeriods[contractAddress].resetTime = SafeMath.add(now, delay);
+        delayPeriods[contractAddress].resetTime = now.add(delay);
         emit DelayTriggered(contractAddress, delay, msg.sender);
         return true;
     }
     
     function cancelPayment(address recipient) public returns(bool){
-        uint value = payouts[msg.sender][recipient].amount;
-        if(value > 0){
-            payouts[msg.sender][recipient].amount = 0;
-            emit PaymentCancelled(msg.sender, recipient, value);
+        uint256 value = payouts[msg.sender].pendingPayments[recipient].amount;
+        
+        
+        if(value > 0 && payouts[msg.sender].pendingPayments[recipient].timestamp.add(checkTimeWindow(msg.sender)) >= now ){
+            emptyAccount(msg.sender, recipient); 
             msg.sender.transfer(value);
+            emit PaymentCancelled(msg.sender, recipient, value);
+            return true;
         }
+        return false;
+    }
+
+
+    function emptyAccount(address contractAddress, address recipient) internal returns(bool){
+        payouts[contractAddress].pendingPayments[recipient].amount = 0;   
+
+        uint256 swapIndex = payouts[contractAddress].pendingAddresses.length - 1;
+        uint256 deleteIndex = payouts[contractAddress].pendingPayments[msg.sender].index;
+        address swapAddress = payouts[contractAddress].pendingAddresses[swapIndex];
+
+        payouts[contractAddress].pendingAddresses[deleteIndex] = swapAddress;
+        payouts[contractAddress].pendingPayments[swapAddress].index = deleteIndex;        
+        delete payouts[contractAddress].pendingAddresses[swapIndex];
+        delete payouts[contractAddress].pendingPayments[recipient];
+        payouts[contractAddress].pendingAddresses.length = payouts[contractAddress].pendingAddresses.length - 1;        
+        return true;
     }
 
     function () public payable {

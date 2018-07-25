@@ -1,29 +1,28 @@
-pragma solidity ^0.4.21;
+pragma solidity ^0.4.24;
+pragma experimental ABIEncoderV2;
 import "./MoneyControl.sol";
 
 // melonport 
 // securify
 contract Coin is MoneyControl{
-    
+    using SafeMath for uint256;
     address public minter;
-        
-    mapping (address => uint) public balances;    
-    bool itworked = false;
+
+    mapping (address => uint256) public balances;        
 
     // This is the constructor whose code is
     // run only when the contract is created.
     constructor(address _DEHAddress) MoneyControl(_DEHAddress) public {
-        minter = msg.sender;
-        owners[0xa66B994Fe08196c894E0d262822ed5538D9292CD] = true;        
+        minter = msg.sender;        
     }
 
     function mint(address receiver) public payable returns(bool){
         if (msg.sender != minter) revert();
-        balances[receiver] += msg.value; // Add some 'rate' conversion
+        balances[receiver] = balances[receiver].add(msg.value);
         return true;
     }
     
-    function sell(uint ammountToSell) public returns(bool){
+    function sell(uint256 ammountToSell) public returns(bool){
         if(ammountToSell <= balances[msg.sender]){
             balances[msg.sender] = balances[msg.sender] - ammountToSell;
             return transferViaDEH(msg.sender, ammountToSell);
@@ -31,26 +30,35 @@ contract Coin is MoneyControl{
         return false;
     }
     
-    function checkBalance() public view returns(uint){
+    function checkBalance() public view returns(uint256){
         return balances[msg.sender];
     }
 
-    function transfer(address receiver, uint amount) public {
+    function transfer(address receiver, uint256 amount) public {
         if (balances[msg.sender] < amount) return;
-        balances[msg.sender] = SafeMath.sub(balances[msg.sender], amount);
-        balances[receiver] = SafeMath.add(balances[receiver], amount);
+        balances[msg.sender] = balances[msg.sender].sub(amount);
+        balances[receiver] = balances[receiver].add(amount);
         emit Sent(msg.sender, receiver, amount);
+    }        
+    
+    function init_recover(RecoveryParams params) public recoveryInitCheck(params) returns (bool){
+        recoveryActiveTill = now.add(60*60*2);
     }
     
-    function getItworked() view public returns(bool) {
-        return itworked;
-    }
-    
-    function init_recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v) public recoveryInitCheck(addr, hash, r, s, v) returns (bool){
-        recoveryActiveTill = SafeMath.add(now, 60*60*2);
-    }
-    
-    function failsafe() public returns (bool){
+    /*
+     * Currently just retrievs pending payments from the DEH and suspends any future withdrawals
+     *
+     */
+    function failsafe() public onlyOwner() returns (bool){
+        suspendPayments();
+        address[] memory pending = getPendingPayments();        
+        for(uint i = 0; i < pending.length; i++){
+            address addr = pending[i];            
+            uint256 amountRefunded = checkPending(addr);            
+            require(cancelPayment(addr));
+            balances[addr] = balances[addr].add(amountRefunded);            
+        }
+        emit PaymentsCancelled(pending);
         return true;
     }
 }
