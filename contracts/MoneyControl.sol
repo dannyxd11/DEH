@@ -1,5 +1,4 @@
 pragma solidity ^0.4.24;
-pragma experimental ABIEncoderV2;
 
 import "./DEH.sol";
 import "./Ownable.sol";
@@ -23,30 +22,23 @@ contract MoneyControl is Ownable {
     event PaymentsResumed();    
     event PaymentsCancelled(address[] addr);
     
-    struct RecoveryParams{
-        address addr; 
-        bytes32 hash; 
-        bytes32 r; 
-        bytes32 s; 
-        uint8 v;
-    }
-
-    constructor(address _DEHAddress) Ownable() public{
+    constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) Ownable() public{
         DEHAddress = _DEHAddress;    
         DEHInstance = DEH(DEHAddress);    
+        DEHInstance.initialise(_ValidatorService, _RuleSet);        
     }
     
-    modifier recoveryInitCheck(RecoveryParams params){
-        address recovered = ecrecover(params.hash, params.v, params.r, params.s);
+    modifier recoveryInitCheck( address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v ){
+        address recovered = ecrecover(hash, v, r, s);
         emit PrintRecovered(recovered, recovery);
         if(recovered == recovery){
-            bytes32 calculatedHash = keccak256(toBytes(params.addr));
-            emit PreHash(abi.encodePacked("\x19Ethereum Signed Message:\n20", params.addr));
-            if(calculatedHash == params.hash){
-                emit PerformingRecovery(params.addr);
+            bytes32 calculatedHash = keccak256(toBytes(addr));
+            emit PreHash(abi.encodePacked("\x19Ethereum Signed Message:\n20", addr));
+            if(calculatedHash == hash){
+                emit PerformingRecovery(addr);
                 _;
             }else{
-                emit HashFailed(calculatedHash, params.hash, params.addr);
+                emit HashFailed(calculatedHash, hash, addr);
             }
         }
     }
@@ -86,7 +78,7 @@ contract MoneyControl is Ownable {
     // Need function to update recovery keys
     // Below abstract instructions to be implemented in child contract
     function failsafe() public onlyOwner() returns(bool); 
-    function init_recover(RecoveryParams params) public recoveryInitCheck(params) returns (bool);
+    function init_recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v) public recoveryInitCheck( addr,  hash, r, s, v) returns (bool);
 
     function toBytes(address a) private pure returns (bytes b){
         assembly {

@@ -1,5 +1,4 @@
 pragma solidity ^0.4.24;
-pragma experimental ABIEncoderV2;
 import "./MoneyControl.sol";
 
 // melonport 
@@ -12,7 +11,7 @@ contract Coin is MoneyControl{
 
     // This is the constructor whose code is
     // run only when the contract is created.
-    constructor(address _DEHAddress) MoneyControl(_DEHAddress) public {
+    constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) MoneyControl(_DEHAddress, _ValidatorService, _RuleSet) public {
         minter = msg.sender;        
     }
 
@@ -41,7 +40,7 @@ contract Coin is MoneyControl{
         emit Sent(msg.sender, receiver, amount);
     }        
     
-    function init_recover(RecoveryParams params) public recoveryInitCheck(params) returns (bool){
+    function init_recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v) public recoveryInitCheck(addr, hash, r , s, v) returns (bool){
         recoveryActiveTill = now.add(60*60*2);
     }
     
