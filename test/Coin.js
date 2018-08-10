@@ -9,7 +9,7 @@ const printEvents = false;
 
 contract('Coin', async (accounts) => {	
 	
-	it("Should be able to deploy contract and minter should be able to allocate Coin tokens", async () => {	
+	it("Should be able to deploy contract and should be able to buy Coin tokens", async () => {	
 		const account_owner = accounts[0];
 		const account_one = accounts[1];
 		const account_two = accounts[2];
@@ -22,7 +22,7 @@ contract('Coin', async (accounts) => {
 		let account_one_starting_balance = await coin.checkBalance.call({ from:account_one });
 		account_one_starting_balance = account_one_starting_balance.toNumber();
 
-		let resp = await coin.mint(account_one,{from: account_owner, value: transferAmount});
+		let resp = await coin.buy({from: account_one, value: transferAmount});
 		let gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
 		
 		let account_one_ending_balance = await coin.checkBalance.call({ from:account_one });
@@ -303,4 +303,8 @@ contract('Coin', async (accounts) => {
 		assert.equal(deh_end_withdrawable_balance, 0, "DEH was not emptied on withdraw");	
 	}).timeout(40000);
   
+
+	it("Owners should be able to initiate a failsafe to cancel pending payments.", async () => {	
+
+	}).timeout(40000);
 });

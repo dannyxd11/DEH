@@ -6,11 +6,10 @@ import "./Ownable.sol";
 contract MoneyControl is Ownable {
     using SafeMath for uint256;
     address internal DEHAddress;
-    DEH internal DEHInstance;
-    uint256 internal recoveryActiveTill = 0;    
-    // Update with recovery address before deploying
-    address internal recovery = 0xa66B994Fe08196c894E0d262822ed5538D9292CD; 
+    DEH internal DEHInstance;        
+    address internal recovery = 0xa66B994Fe08196c894E0d262822ed5538D9292CD; // Update with recovery address before deploying
     bool private paymentsSuspended = false;
+    uint nonce = 1;
 
     event Transaction(address recipient, uint256 value);        
     event Sent(address from, address to, uint256 amount);
@@ -28,11 +27,13 @@ contract MoneyControl is Ownable {
         DEHInstance.initialise(_ValidatorService, _RuleSet);        
     }
     
-    modifier recoveryInitCheck( address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v ){
+    modifier recoveryInitCheck(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v, uint _nonce){
+        require(_nonce > nonce, "Nonce has been reused");
+        nonce = _nonce;
         address recovered = ecrecover(hash, v, r, s);
         emit PrintRecovered(recovered, recovery);
         if(recovered == recovery){
-            bytes32 calculatedHash = keccak256(toBytes(addr));
+            bytes32 calculatedHash = keccak256(abi.encodePacked(toBytes(addr), nonce));            
             emit PreHash(abi.encodePacked("\x19Ethereum Signed Message:\n20", addr));
             if(calculatedHash == hash){
                 emit PerformingRecovery(addr);
@@ -41,11 +42,6 @@ contract MoneyControl is Ownable {
                 emit HashFailed(calculatedHash, hash, addr);
             }
         }
-    }
-    
-    modifier recoveryCheck(){
-        require(now < recoveryActiveTill);
-        _;
     }
 
     modifier paymentsAllowed(){
@@ -78,7 +74,7 @@ contract MoneyControl is Ownable {
     // Need function to update recovery keys
     // Below abstract instructions to be implemented in child contract
     function failsafe() public onlyOwner() returns(bool); 
-    function init_recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v) public recoveryInitCheck( addr,  hash, r, s, v) returns (bool);
+    function recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v, uint _nonce) public recoveryInitCheck( addr,  hash, r, s, v, _nonce) returns (bool);
 
     function toBytes(address a) private pure returns (bytes b){
         assembly {
@@ -102,7 +98,9 @@ contract MoneyControl is Ownable {
         return true;
     }
 
-    function () public payable {}            
+    function () public payable {
+        require(msg.sender == DEHAddress, "Payments only accepted from the DEH (Refund/Cancellation)");
+    }            
 
 }
 

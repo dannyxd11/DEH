@@ -13,6 +13,7 @@ contract ThresholdValidatorService is ValidatorService{
         uint256 thresholdToDelay;        
         uint256 votes;
         address[] voters;
+        mapping(address => bool) voted;
         uint256 resetVotesTime;
     }
 
@@ -25,15 +26,29 @@ contract ThresholdValidatorService is ValidatorService{
         if(validatorDetails[scAddress].votes == 0){
             validatorDetails[scAddress].resetVotesTime = now.add(60*60);
         }
-        validatorDetails[scAddress].votes = validatorDetails[scAddress].votes.add(1);
-        validatorDetails[scAddress].voters.push(validator);
-        return true;
+        if(validatorDetails[scAddress].voted[validator] == false){
+            validatorDetails[scAddress].votes = validatorDetails[scAddress].votes.add(1);
+            validatorDetails[scAddress].voters.push(validator);
+            validatorDetails[scAddress].voted[validator] = true;
+            return true;
+        }else{
+            return false;
+        }
+    }
+
+    function resetVoters(address scAddress) public returns (bool){        
+        for(uint i = 0; i < validatorDetails[scAddress].voters.length; i++ ){
+            uint length = validatorDetails[scAddress].voters.length;
+            validatorDetails[scAddress].voted[validatorDetails[scAddress].voters[length-1]] = false;
+            delete validatorDetails[scAddress].voters[length-1];
+            validatorDetails[scAddress].voters.length = length - 1;
+        }
     }
 
     function startOrResetVote(address scAddress) public returns (bool){
         if(validatorDetails[scAddress].resetVotesTime < now){
             validatorDetails[scAddress].votes = 0;
-            delete validatorDetails[scAddress].voters;
+            return resetVoters(scAddress);
         }
         return true;
     }
