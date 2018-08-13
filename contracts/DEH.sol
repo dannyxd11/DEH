@@ -141,7 +141,7 @@ contract DEH {
             emit CancellingPayment(value, reward, _depositTimestamp.add(defaultDelayPeriod), now, recipient);
             return true;
         }
-        return false;
+        return true;
     }
 
     function emptyAccount(address contractAddress, address recipient) internal returns(bool){

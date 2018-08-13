@@ -30,9 +30,9 @@ contract MoneyControl is Ownable {
     modifier recoveryInitCheck(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v, uint _nonce){
         require(_nonce > nonce, "Nonce has been reused");
         nonce = _nonce;
-        address recovered = ecrecover(hash, v, r, s);
-        emit PrintRecovered(recovered, recovery);
-        if(recovered == recovery){
+        // address recovered = ecrecover(hash, v, r, s);
+        // emit PrintRecovered(recovered, recovery);
+        if(ecrecover(hash, v, r, s) == recovery){
             bytes32 calculatedHash = keccak256(abi.encodePacked(toBytes(addr), nonce));            
             emit PreHash(abi.encodePacked("\x19Ethereum Signed Message:\n20", addr));
             if(calculatedHash == hash){
@@ -74,7 +74,7 @@ contract MoneyControl is Ownable {
     // Need function to update recovery keys
     // Below abstract instructions to be implemented in child contract
     function failsafe() public onlyOwner() returns(bool); 
-    function recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v, uint _nonce) public recoveryInitCheck( addr,  hash, r, s, v, _nonce) returns (bool);
+    function recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v, uint _nonce) public recoveryInitCheck( addr,  hash, r, s, v, _nonce);
 
     function toBytes(address a) private pure returns (bytes b){
         assembly {
