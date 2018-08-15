@@ -4,27 +4,26 @@ import "./SafeMath.sol";
 import "./ValidatorService.sol";
 
 contract ThresholdValidatorService is ValidatorService{
-    using SafeMath for uint256;
+    using SafeMath128 for uint128;
+    using SafeMath64 for uint64;
     mapping(address => SCValidation) validatorDetails;
     
     event Votes(uint votes);
-    struct SCValidation{
-        uint256 validatorCount;
-        uint256 thresholdToDelay;        
-        uint256 votes;
+    struct SCValidation{        
+        uint64 thresholdToDelay;        
+        uint64 votes;
+        uint64 resetVotesTime;
         address[] voters;
         mapping(address => bool) voted;
-        uint256 resetVotesTime;
     }
 
-    struct Validator{
-        uint lastVoteTime;
-        bool active;
-    }    
+    function initialise(uint64 _thesholdToDelay) public{
+        validatorDetails[msg.sender].thresholdToDelay = _thesholdToDelay;
+    }
 
     function submitDelayVote(address scAddress, address validator) public returns (bool){
         if(validatorDetails[scAddress].votes == 0){
-            validatorDetails[scAddress].resetVotesTime = now.add(60*60);
+            validatorDetails[scAddress].resetVotesTime = uint64(now).add(60*60);
         }
         if(validatorDetails[scAddress].voted[validator] == false){
             validatorDetails[scAddress].votes = validatorDetails[scAddress].votes.add(1);
@@ -53,7 +52,7 @@ contract ThresholdValidatorService is ValidatorService{
         return true;
     }
 
-    function isDelayed(address scAddress) public returns (int){        
+    function isDelayed(address scAddress) public returns (int128){        
         if (validatorDetails[scAddress].votes > validatorDetails[scAddress].thresholdToDelay){
             delayId = delayId + 1;
             delayVoters[uint(delayId)] = validatorDetails[scAddress].voters;
@@ -65,9 +64,9 @@ contract ThresholdValidatorService is ValidatorService{
     function cancellationReward(int _delayId) public payable returns (bool){
         uint numberOfVoters = delayVoters[uint(_delayId)].length;
         require(numberOfVoters > 0);
-        uint amountPerValidator = msg.value / numberOfVoters;
+        uint128 amountPerValidator = uint128(msg.value / numberOfVoters);
         for (uint i = 0; i < numberOfVoters; i++){
-            validatorPayouts[delayVoters[uint(_delayId)][i]] = validatorPayouts[delayVoters[uint(_delayId)][i]].add(amountPerValidator);
+            validatorPayouts[delayVoters[uint(_delayId)][i]] = validatorPayouts[delayVoters[uint(_delayId)][i]].add(amountPerValidator);            
         }
         return true;
     }

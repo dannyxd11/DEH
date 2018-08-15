@@ -4,22 +4,23 @@ import "./DEH.sol";
 import "./Ownable.sol";
 
 contract MoneyControl is Ownable {
-    using SafeMath for uint256;
+    using SafeMath128 for uint128;
+    using SafeMath64 for uint64;
     address internal DEHAddress;
     DEH internal DEHInstance;        
     address internal recovery = 0xa66B994Fe08196c894E0d262822ed5538D9292CD; // Update with recovery address before deploying
     bool private paymentsSuspended = false;
-    uint nonce = 1;
+    bool private hasbeenrecovered = false;
+    uint256 nonce = 1;
 
     event Transaction(address recipient, uint256 value);        
     event Sent(address from, address to, uint256 amount);
-    event HashFailed(bytes32 calculatedHash, bytes32 hash, address addr);
-    event PerformingRecovery(address addr); 
-    event PrintRecovered(address recovered, address recovery);
-    event PreHash(bytes hashval);
+    event FailedRecovery(bytes32 calculatedHash, uint256 _nonce);
+    event PerformingRecovery(address addr);         
     event PaymentsSuspended();
     event PaymentsResumed();    
     event PaymentsCancelled(address[] addr);
+    
     
     constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) Ownable() public{
         DEHAddress = _DEHAddress;    
@@ -27,21 +28,17 @@ contract MoneyControl is Ownable {
         DEHInstance.initialise(_ValidatorService, _RuleSet);        
     }
     
-    modifier recoveryInitCheck(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v, uint _nonce){
+    modifier recoveryInitCheck(address addr, bytes32 r, bytes32 s, uint8 v, uint256 _nonce){
         require(_nonce > nonce, "Nonce has been reused");
+        require(hasbeenrecovered == false, "Recovey should only be performed once.");
         nonce = _nonce;
-        // address recovered = ecrecover(hash, v, r, s);
-        // emit PrintRecovered(recovered, recovery);
-        if(ecrecover(hash, v, r, s) == recovery){
-            bytes32 calculatedHash = keccak256(abi.encodePacked(toBytes(addr), nonce));            
-            emit PreHash(abi.encodePacked("\x19Ethereum Signed Message:\n20", addr));
-            if(calculatedHash == hash){
-                emit PerformingRecovery(addr);
-                _;
-            }else{
-                emit HashFailed(calculatedHash, hash, addr);
-            }
+        bytes32 calculatedHash = keccak256(abi.encodePacked(addr, _nonce));        
+        if(ecrecover(calculatedHash, v, r, s) == recovery){                                            
+            emit PerformingRecovery(addr);
+            hasbeenrecovered = true;
+            _;            
         }
+        emit FailedRecovery(calculatedHash, nonce);
     }
 
     modifier paymentsAllowed(){
@@ -55,8 +52,11 @@ contract MoneyControl is Ownable {
         return DEHInstance.deposit.value(val)(recipient);
     }
 
-    function checkPending(address recipient) public view onlyOwner() returns (uint256){        
-        return DEHInstance.checkWithdrawableAsContract(recipient);
+    function checkPending(address recipient) public view onlyOwner() returns (uint128){ 
+        uint128 reward;
+        uint128 value;
+        (value, reward) = DEHInstance.checkWithdrawableAsContract(recipient);
+        return value;
     }
 
     function cancelPayment(address recipient) public onlyOwner() returns (bool){        
@@ -74,7 +74,7 @@ contract MoneyControl is Ownable {
     // Need function to update recovery keys
     // Below abstract instructions to be implemented in child contract
     function failsafe() public onlyOwner() returns(bool); 
-    function recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v, uint _nonce) public recoveryInitCheck( addr,  hash, r, s, v, _nonce);
+    function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint _nonce) public recoveryInitCheck( addr, r, s, v, _nonce);
 
     function toBytes(address a) private pure returns (bytes b){
         assembly {

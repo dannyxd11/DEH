@@ -4,9 +4,10 @@ import "./MoneyControl.sol";
 // melonport 
 // securify
 contract Coin is MoneyControl{
-    using SafeMath for uint256;    
-    uint256 totalsupply;
-    uint256 remainingsupply;
+    using SafeMath128 for uint128;
+    using SafeMath64 for uint64;
+    uint128 totalsupply;
+    uint128 remainingsupply;
     mapping (address => Account) public balances;
     address[] activeAccounts;     
     
@@ -18,27 +19,27 @@ contract Coin is MoneyControl{
     }
 
     struct Account{
-        uint256 balance;
-        uint256 index;
+        uint128 balance;
+        uint64 index;
     }
 
     function send_to(address account) public payable returns(bool){ // Allocate funds 
         require(msg.value / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
-        if(balances[account].balance == 0){balances[account].index = activeAccounts.push(account) - 1;}
-        balances[account].balance = balances[account].balance.add(msg.value);        
-        remainingsupply = remainingsupply - msg.value / 10**6;
+        if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account) - 1);}
+        balances[account].balance = balances[account].balance.add(uint128(msg.value));        
+        remainingsupply = uint128(remainingsupply - msg.value / 10**6);
         return true;
     }
 
     function buy() public payable returns(bool){
         require(msg.value / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
-        if(balances[msg.sender].balance == 0){balances[msg.sender].index = activeAccounts.push(msg.sender) - 1;}
-        balances[msg.sender].balance = balances[msg.sender].balance.add(msg.value);        
-        remainingsupply = remainingsupply - msg.value / 10**6;
+        if(balances[msg.sender].balance == 0){balances[msg.sender].index = uint64(activeAccounts.push(msg.sender) - 1);}
+        balances[msg.sender].balance = balances[msg.sender].balance.add(uint128(msg.value));        
+        remainingsupply = uint128(remainingsupply - msg.value / 10**6);
         return true;
     }
     
-    function sell(uint256 amountToSell) public returns(bool){
+    function sell(uint128 amountToSell) public returns(bool){
         require(balances[msg.sender].balance >= amountToSell, "Insufficient Funds");
         balances[msg.sender].balance = balances[msg.sender].balance.sub(amountToSell);
         if(balances[msg.sender].balance == 0){deleteAccount(msg.sender);}
@@ -49,8 +50,8 @@ contract Coin is MoneyControl{
     function deleteAccount(address addr) internal returns(bool){
         require(balances[addr].balance == 0, "Account not empty before deletion");
 
-        uint256 swapIndex = activeAccounts.length - 1;
-        uint256 deleteIndex = balances[addr].index;
+        uint64 swapIndex = uint64(activeAccounts.length - 1);
+        uint64 deleteIndex = balances[addr].index;
         address swapAddress = activeAccounts[swapIndex];
 
         activeAccounts[deleteIndex] = swapAddress;
@@ -61,37 +62,43 @@ contract Coin is MoneyControl{
         return true;
     }
 
-    function checkTotalSupply() public view returns(uint256){
+    function checkTotalSupply() public view returns(uint128){
         return totalsupply;
     }
 
-    function checkRemainingSupply() public view returns(uint256){
+    function checkRemainingSupply() public view returns(uint128){
         return remainingsupply;
     }
 
-    function checkBalance() public view returns(uint256){
+    function checkBalance() public view returns(uint128){
         return balances[msg.sender].balance;
     }
 
-    function transfer(address receiver, uint256 amount) public {
+    function transfer(address receiver, uint128 amount) public {
         if (balances[msg.sender].balance < amount) return;
         balances[msg.sender].balance = balances[msg.sender].balance.sub(amount);
         if(balances[msg.sender].balance == 0){deleteAccount(msg.sender);}
-        if(balances[receiver].balance == 0){balances[receiver].index = activeAccounts.push(receiver) - 1;}
+        if(balances[receiver].balance == 0){balances[receiver].index = uint64(activeAccounts.push(receiver) - 1);}
         balances[receiver].balance = balances[receiver].balance.add(amount);
         emit Sent(msg.sender, receiver, amount);
     }        
     
-    function recover(address addr, bytes32 hash, bytes32 r, bytes32 s, uint8 v, uint nonce) public recoveryInitCheck(addr, hash, r , s, v, nonce){
-        //DEHInstance.deposit.value(address(this).balance)(addr);
-        // for(uint i = 0; i < activeAccounts.length; i++){
-        //     uint amount = balances[activeAccounts[i]].balance;
-        //     balances[activeAccounts[i]].balance = 0;
-        //     Coin(addr).send_to.value(amount)(activeAccounts[i]);    
-        //     deleteAccount(activeAccounts[i]);     
-        // }
-        emit PerformingRecovery(addr);
+    function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint nonce) public recoveryInitCheck(addr, r , s, v, nonce){
+        // DEHInstance.deposit.value(address(this).balance)(addr);
+        suspendPayments();
+        for(uint i = 0; i < activeAccounts.length; i++){
+            uint amount = balances[activeAccounts[i]].balance;
+            balances[activeAccounts[i]].balance = 0;
+            Coin(addr).send_to.value(amount)(activeAccounts[i]);    
+            deleteAccount(activeAccounts[i]);     
+            remainingsupply = uint128(remainingsupply + amount / 10**6);
+        }
+        // emit PerformingRecovery(addr);
     }
+
+    // function approve() public {
+    //     //
+    // }
     
     /*
      * Currently just retrievs pending payments from the DEH and suspends any future withdrawals
@@ -102,9 +109,9 @@ contract Coin is MoneyControl{
         address[] memory pending = getPendingPayments();        
         for(uint i = 0; i < pending.length; i++){
             address addr = pending[i];            
-            uint256 amountRefunded = checkPending(addr);            
+            uint128 amountRefunded = checkPending(addr);            
             require(cancelPayment(addr));
-            if(balances[addr].balance == 0){balances[addr].index = activeAccounts.push(addr) - 1;}
+            if(balances[addr].balance == 0){balances[addr].index = uint64(activeAccounts.push(addr) - 1);}
             balances[addr].balance = balances[addr].balance.add(amountRefunded);            
         }
         emit PaymentsCancelled(pending);
@@ -124,4 +131,7 @@ contract Coin is MoneyControl{
         }
         return true;
     }
+
+      
+
 }
