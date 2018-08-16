@@ -2,11 +2,10 @@ var DEH = artifacts.require("./DEH.sol");
 var Coin = artifacts.require("./Coin.sol");
 var ThresholdValidatorService = artifacts.require("./ThresholdValidatorService.sol");
 var RuleSet = artifacts.require("./RuleSet.sol");
-//var MoneyControl = artifacts.require("./MoneyControl.sol");
 
 module.exports = function(deployer) {
-  var _ThresholdValidatorServiceInstance;// = deployer.deploy(ThresholdValidators);
-  var _RuleSetInstance;// = deployer.deploy(RuleSet);
+  var _ThresholdValidatorServiceInstance;
+  var _RuleSetInstance;
   var _DEHInstance;
 
   deployer.deploy(ThresholdValidatorService)
@@ -18,7 +17,11 @@ module.exports = function(deployer) {
       .then(_instance => _RuleSetInstance = _instance)
     ).then( () =>
   deployer.deploy(DEH)
-    .then(() => DEH.deployed())    
-    .then( _instance => deployer.deploy(Coin, _instance.address, _ThresholdValidatorServiceInstance.address, _RuleSetInstance.address))
-    )
+    .then(() => DEH.deployed())        
+    .then( _instance => deployer.deploy(Coin, _instance.address, _ThresholdValidatorServiceInstance.address, _RuleSetInstance.address)
+    .then(console.log("DEH: " + _instance.address))
+    .then(console.log("Validator: " + _ThresholdValidatorServiceInstance.address))
+    .then(console.log("RuleSet: " + _RuleSetInstance.address))
+  ))
+    
 }

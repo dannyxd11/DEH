@@ -1,8 +1,15 @@
-pragma solidity ^0.4.21;
+pragma solidity ^0.4.24;
 
+
+/*
+* @title	Ruleset that contains constants to be used throughout various conrtacts
+* @author	Dan Whitehouse - https://github.com/dannyxd11
+*/
 contract RuleSet{
-    uint256 public rateLimitPeriod = 0; // seconds
-    uint256 public rateLimit = 0;
-    uint256 public defaultDelayPeriod = 3*60*60;
-    uint256 public delayPeriod = 24*60*60;
+    uint64 public constant rateLimitPeriod = uint64(0); 
+    uint64 public constant rateLimit = uint64(0);
+    uint64 public constant defaultDelayPeriod = uint64(3*60*60);
+    uint64 public constant validatorDelayPeriod = uint64(24*60*60);
+    uint64 public constant rewardPercent = uint64(2);
+    uint64 public constant validatorServiceParam = uint64(0);
 }

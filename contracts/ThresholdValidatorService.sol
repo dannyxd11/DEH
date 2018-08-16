@@ -3,27 +3,34 @@ pragma solidity ^0.4.21;
 import "./SafeMath.sol";
 import "./ValidatorService.sol";
 
+/*
+* @title	Validator service that uses a simple threshold to determine whether a contracts transactions should be delayed.
+* @author	Dan Whitehouse - https://github.com/dannyxd11
+*/
 contract ThresholdValidatorService is ValidatorService{
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
     mapping(address => SCValidation) validatorDetails;
-    
-    event Votes(uint votes);
+
+    event NewContract(address scAddress, uint64 threshold, uint64 reward);
     struct SCValidation{        
         uint64 thresholdToDelay;        
         uint64 votes;
         uint64 resetVotesTime;
+        uint64 rewardPercent;
         address[] voters;
         mapping(address => bool) voted;
     }
 
-    function initialise(uint64 _thesholdToDelay) public{
-        validatorDetails[msg.sender].thresholdToDelay = _thesholdToDelay;
+    function initialise(address scAddress, uint64 _thresholdToDelay, uint64 _rewardPercent) public{
+        validatorDetails[scAddress].thresholdToDelay = _thresholdToDelay;
+        validatorDetails[scAddress].rewardPercent = _rewardPercent;
+        emit NewContract(scAddress, _thresholdToDelay, _rewardPercent);
     }
 
-    function submitDelayVote(address scAddress, address validator) public returns (bool){
+    function submitDelayVote(address scAddress, address validator) public returns (bool){        
         if(validatorDetails[scAddress].votes == 0){
-            validatorDetails[scAddress].resetVotesTime = uint64(now).add(60*60);
+            validatorDetails[scAddress].resetVotesTime = uint64(now).add(60*60); // What time should this be
         }
         if(validatorDetails[scAddress].voted[validator] == false){
             validatorDetails[scAddress].votes = validatorDetails[scAddress].votes.add(1);
@@ -52,7 +59,7 @@ contract ThresholdValidatorService is ValidatorService{
         return true;
     }
 
-    function isDelayed(address scAddress) public returns (int128){        
+    function isDelayed(address scAddress) public returns (int128){            
         if (validatorDetails[scAddress].votes > validatorDetails[scAddress].thresholdToDelay){
             delayId = delayId + 1;
             delayVoters[uint(delayId)] = validatorDetails[scAddress].voters;
@@ -89,6 +96,6 @@ contract ThresholdValidatorService is ValidatorService{
     function revokeValidator(address validatorAddress) public returns (bool){
         validators[validatorAddress] = false;                
         return true;
-    }
+    }    
 
 }

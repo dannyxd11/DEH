@@ -7,30 +7,32 @@ const jsonrpc = '2.0'
 const id = 0;
 const send = (method, params = []) =>  web3.currentProvider.send({ id, jsonrpc, method, params })
 const printEvents = false;
-
+console.log("Coin Address: " + Coin.address);
 contract('DEH', async (accounts) => {
-	
+
   it("DEH should be able to accept funds from contract/account", async () => {		
 		let account_one = accounts[0];
 		let account_two = accounts[1];
 		let transferAmount = web3.toWei(0.02,'ether');
 		
-    let deh = await DEH.deployed();
+    	let deh = await DEH.deployed();
 		let account_one_starting_balance = await web3.eth.getBalance(account_one);
 		account_one_starting_balance = account_one_starting_balance.toNumber();
 		let account_two_starting_balance = await deh.checkWithdrawable.call(account_one,{from: account_two});
 		account_two_starting_balance = account_two_starting_balance.toNumber();
 
-    let resp = await deh.deposit(account_two,{from: account_one, value: transferAmount});
+		let resp = await deh.initialise(ThresholdValidatorService.address, RuleSet.address,{from: account_one});
 		let gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
+
+    	resp = await deh.deposit(account_two,{from: account_one, value: transferAmount});
+		gascost += web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
 		
 		let account_one_ending_balance = await web3.eth.getBalance(account_one);
 		account_one_ending_balance = account_one_ending_balance.toNumber();
 		let account_two_ending_balance = await deh.checkWithdrawable.call(account_one,{from: account_two});
 		account_two_ending_balance = account_two_ending_balance.toNumber();
-
-		//console.log(web3.fromWei(account_one_starting_balance, 'ether') + "\n" + account_two_starting_balance + "\n" + account_one_ending_balance + "\n"+ account_two_ending_balance + "\n" + transferAmount + "\n" + gascost );
-    assert.closeTo(account_one_ending_balance, account_one_starting_balance - parseInt(transferAmount) - gascost, 20000,"Amount wasn't correctly taken from the sender");
+		
+   		assert.closeTo(account_one_ending_balance, account_one_starting_balance - parseInt(transferAmount) - gascost, 20000,"Amount wasn't correctly taken from the sender");
 		assert.closeTo(account_two_ending_balance, account_two_starting_balance + parseInt(transferAmount), 20000, "Amount wasn't correctly sent to the receiver");
 		if(printEvents){truffleAssert.prettyPrintEmittedEvents(resp);}
 	});
@@ -39,7 +41,7 @@ contract('DEH', async (accounts) => {
 		let account_one = accounts[0];
 		let account_two = accounts[1];		
 
-    let deh = await DEH.deployed();
+   		let deh = await DEH.deployed();
 		let deh_starting_balance = await web3.eth.getBalance(deh.address);
 		deh_starting_balance = deh_starting_balance.toNumber();
 		let deh_account_starting_balance = await deh.checkWithdrawable.call(account_one,{from: account_two});
@@ -48,7 +50,7 @@ contract('DEH', async (accounts) => {
 		account_two_starting_balance = account_two_starting_balance.toNumber();
 
 
-    let resp = await deh.withdraw(account_one,{from: account_two});
+    	let resp = await deh.withdraw(account_one,{from: account_two, gas: 6000000});
 		let gascost = web3.eth.getTransaction(resp.tx).gasPrice.mul(web3.eth.getTransactionReceipt(resp.tx).gasUsed).toNumber();
 		
 		let deh_ending_balance = await web3.eth.getBalance(deh.address);
@@ -57,8 +59,7 @@ contract('DEH', async (accounts) => {
 		deh_account_ending_balance = deh_account_ending_balance.toNumber();
 		let account_two_ending_balance = await web3.eth.getBalance(account_two);
 		account_two_ending_balance = account_two_ending_balance.toNumber();
-
-		//console.log(deh_starting_balance + "\n" + deh_account_starting_balance + "\n"  + account_two_starting_balance + "\n"  + deh_ending_balance + "\n"+ deh_account_ending_balance + "\n" + account_two_ending_balance + "\n" + gascost );
+		
 		assert.closeTo(deh_ending_balance, deh_starting_balance, 20000, "Amount wasn't correctly taken from the sender");
 		assert.closeTo(deh_account_ending_balance, deh_account_starting_balance, 20000, "Full ammount was not withdrawn");
 		assert.closeTo(account_two_ending_balance, account_two_starting_balance - gascost, 20000, "Amount wasn't correctly sent to the receiver");
@@ -174,7 +175,7 @@ contract('DEH', async (accounts) => {
 		
 		let account_two_withdrawable_balance = await deh.checkWithdrawable.call(account_one,{from: account_two});
 		account_two_withdrawable_balance = account_two_withdrawable_balance.toNumber();
-	  let account_two_ending_balance = await web3.eth.getBalance(account_two);
+	  	let account_two_ending_balance = await web3.eth.getBalance(account_two);
 		account_two_ending_balance = account_two_ending_balance.toNumber();
 
 		assert.closeTo(account_two_withdrawable_balance, account_two_withdrawable_balance_end, 20000, "Withdrawal has been made (when it shouldn't have proceeded)");

@@ -3,6 +3,11 @@ pragma solidity ^0.4.24;
 import "./DEH.sol";
 import "./Ownable.sol";
 
+
+/*
+* @title	Money Control contract to be inheritied by appropriate contracts to use a Decentralised Escape Hatch to send payments in a safe and temporarily reversable manor.
+* @author	Dan Whitehouse - https://github.com/dannyxd11
+*/
 contract MoneyControl is Ownable {
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
@@ -21,11 +26,10 @@ contract MoneyControl is Ownable {
     event PaymentsResumed();    
     event PaymentsCancelled(address[] addr);
     
-    
-    constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) Ownable() public{
+    constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) public {
         DEHAddress = _DEHAddress;    
-        DEHInstance = DEH(DEHAddress);    
-        DEHInstance.initialise(_ValidatorService, _RuleSet);        
+        DEHInstance = DEH(DEHAddress);
+        DEHInstance.initialise(_ValidatorService, _RuleSet);
     }
     
     modifier recoveryInitCheck(address addr, bytes32 r, bytes32 s, uint8 v, uint256 _nonce){
@@ -43,16 +47,15 @@ contract MoneyControl is Ownable {
 
     modifier paymentsAllowed(){
         require(paymentsSuspended == false);
-        _;        
+        _;
     }
 
-    
     function transferViaDEH(address recipient, uint256 val) internal paymentsAllowed() returns(bool){
         emit Transaction(recipient, val);        
         return DEHInstance.deposit.value(val)(recipient);
     }
 
-    function checkPending(address recipient) public view onlyOwner() returns (uint128){ 
+    function checkPending(address recipient) public onlyOwner() returns (uint128){ 
         uint128 reward;
         uint128 value;
         (value, reward) = DEHInstance.checkWithdrawableAsContract(recipient);
@@ -70,21 +73,9 @@ contract MoneyControl is Ownable {
     function showRecovery() public view returns(address){ 
         return recovery;
     }    
-    
-    // Need function to update recovery keys
-    // Below abstract instructions to be implemented in child contract
+       
     function failsafe() public onlyOwner() returns(bool); 
     function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint _nonce) public recoveryInitCheck( addr, r, s, v, _nonce);
-
-    function toBytes(address a) private pure returns (bytes b){
-        assembly {
-            let m := mload(0x40)
-            mstore(add(m, 20), xor(0x140000000000000000000000000000000000000000, a))
-            mstore(0x40, add(m, 52))
-            b := m
-        }
-        return b;
-    }
 
     function suspendPayments() internal returns (bool){
         paymentsSuspended = true;

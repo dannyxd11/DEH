@@ -16,13 +16,11 @@ contract DEH {
 
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
-    uint64 defaultDelayPeriod = 3*60*60;
-    uint8 rewardPercent = 2;
     
     // todo - method for MC to reset graceperiod after 'panic' mode.
     // todo - method to prevent a single validator from DOSing
     
-    event Deposit(address contractAddress, address recipient, uint128 value);
+    event Deposit(address indexed contractAddress, address indexed recipient, uint128 indexed value);
     event Withdrawal(address contractAddress, address recipient, uint128 value);
     event DelayTriggered(address contractAddress, uint64 delayAmount, address validator);
     event EarlyWithdrawalAttempt(address contractAddress, address recipient);    
@@ -41,6 +39,7 @@ contract DEH {
     }
     
     struct Payments{
+        bool initalised;
         address[] pendingAddresses;
         mapping(address => Withdrawable) pendingPayments;
     }
@@ -49,29 +48,30 @@ contract DEH {
         require(ValidatorServices[contractAddress].isValidator(msg.sender) == true, "Sender is not a validator.");
         _;  
     }
+
+    modifier onlyInitialised(){
+        require(payouts[msg.sender].initalised == true, "Validator Service and Rule Set have not been initialised");
+        _;
+    }
     
     function checkTimeWindow(address contractAddress) private returns(uint64){
-        if(delayPeriods[contractAddress].period == 0){
-            delayPeriods[contractAddress].period = defaultDelayPeriod;
-            delayPeriods[contractAddress].resetTime = 0;
-        }else if(now > delayPeriods[contractAddress].resetTime &&
-            delayPeriods[contractAddress].period != defaultDelayPeriod){
-                delayPeriods[contractAddress].period = defaultDelayPeriod;
-                delayPeriods[contractAddress].delayId = 0;
+        uint64 temp_delay = RuleSets[contractAddress].defaultDelayPeriod();
+        ContractDelay storage temp_SC_delay = delayPeriods[contractAddress];
+        if(temp_SC_delay.period == 0 || (now > temp_SC_delay.resetTime && temp_SC_delay.period != temp_delay)){
+            temp_SC_delay.period = temp_delay;
+            temp_SC_delay.resetTime = 0;
         }
-        return delayPeriods[contractAddress].period;
+        return temp_SC_delay.period;
     }
     
     function withdraw(address contractAddress) public returns(bool){   
-        Withdrawable storage temp = payouts[contractAddress].pendingPayments[msg.sender]; 
-        if(temp.amount > 0){
-            if(temp.timestamp.add(checkTimeWindow(contractAddress)) < now ){
-                uint128 ammountToTransfer = temp.amount;
-                emptyAccount(contractAddress, msg.sender);                
-                emit Withdrawal(contractAddress, msg.sender, ammountToTransfer);
-                msg.sender.transfer(ammountToTransfer);
-                return true;
-            } 
+        Withdrawable temp = payouts[contractAddress].pendingPayments[msg.sender]; 
+        if(temp.amount > 0 && temp.timestamp.add(checkTimeWindow(contractAddress)) < now ){
+            uint128 ammountToTransfer = temp.amount;
+            emptyAccount(contractAddress, msg.sender);                
+            emit Withdrawal(contractAddress, msg.sender, ammountToTransfer);
+            msg.sender.transfer(ammountToTransfer);
+            return true;            
         }
         emit EarlyWithdrawalAttempt(contractAddress, msg.sender);
         return false;
@@ -81,13 +81,14 @@ contract DEH {
         return payouts[contractAddress].pendingPayments[msg.sender].amount;
     }
 
-    function checkWithdrawableAsContract(address recipient) public view returns(uint128, uint128){
+    function checkWithdrawableAsContract(address recipient) public returns(uint128, uint128){
         uint128 value = payouts[msg.sender].pendingPayments[recipient].amount;
         uint64 _withdrawalTimestamp = payouts[msg.sender].pendingPayments[recipient].timestamp.add(checkTimeWindow(msg.sender));
         uint64 _depositTimestamp = payouts[msg.sender].pendingPayments[recipient].timestamp;
         uint128 reward = 0;
-        if(value > 0 && _withdrawalTimestamp >= now ){                        
-            if(rewardPercent > 0 && _depositTimestamp.add(defaultDelayPeriod) <= now ){ // else cancellation is possible due to delay, so reward validators
+        uint64 rewardPercent = RuleSets[msg.sender].rewardPercent();
+        if(value > 0 && _withdrawalTimestamp >= now ){
+            if(rewardPercent > 0 && _depositTimestamp.add(RuleSets[msg.sender].defaultDelayPeriod()) <= now ){ 
                 reward = value * rewardPercent / 100;
                 value = value.sub(reward);                                                
             }            
@@ -106,15 +107,13 @@ contract DEH {
      * @param	recipient - address of which to allocate the amount sent to allowing withdrawal later.
      * @return  Returns True indicating success
      */
-    function deposit(address recipient) public payable returns(bool){        
+    function deposit(address recipient) public payable onlyInitialised() returns(bool){        
         Withdrawable memory temp_withdrawable = payouts[msg.sender].pendingPayments[recipient];
 
         if(temp_withdrawable.amount == 0){
             temp_withdrawable.index = uint64(payouts[msg.sender].pendingAddresses.push(recipient)) - 1; 
         }        
-        temp_withdrawable = Withdrawable(temp_withdrawable.amount.add(uint128(msg.value)), 
-            uint64(now), 
-            temp_withdrawable.index);
+        temp_withdrawable = Withdrawable(temp_withdrawable.amount.add(uint128(msg.value)),  uint64(now),  temp_withdrawable.index);
 
         payouts[msg.sender].pendingPayments[recipient] = temp_withdrawable;
         emit Deposit(msg.sender, msg.sender, uint128(msg.value));
@@ -123,15 +122,17 @@ contract DEH {
     
     function initialise(address validatorServiceAddress, address RuleSetAddress) public returns(bool){
         ValidatorServices[msg.sender] = ValidatorService(validatorServiceAddress);
-        RuleSets[msg.sender] = RuleSet(RuleSetAddress);        
+        RuleSets[msg.sender] = RuleSet(RuleSetAddress);
+        ValidatorServices[msg.sender].initialise(msg.sender, RuleSets[msg.sender].validatorServiceParam(), RuleSets[msg.sender].rewardPercent());
+        payouts[msg.sender].initalised = true;  
         return true;
     }
 
     function delayPayments(address contractAddress) public onlyValidators(contractAddress) returns(bool){
-        uint64 delay = 60*60*24;
+        uint64 delay = RuleSets[contractAddress].validatorDelayPeriod();
 
         // Currently already in a delay, so ignore
-        if (delayPeriods[contractAddress].period > defaultDelayPeriod && delayPeriods[contractAddress].resetTime > now){
+        if (delayPeriods[contractAddress].period > RuleSets[contractAddress].defaultDelayPeriod() && delayPeriods[contractAddress].resetTime > now){
             return false;
         }
 
@@ -141,6 +142,7 @@ contract DEH {
         // Add vote to delay
         ValidatorServices[contractAddress].submitDelayVote(contractAddress, msg.sender);
         int128 delayId = ValidatorServices[contractAddress].isDelayed(contractAddress);
+        //delayId = -1 if no delay.
         if(delayId > 0){        
             delayPeriods[contractAddress].period = delay;
             delayPeriods[contractAddress].resetTime = uint64(now).add(delay);
@@ -155,9 +157,10 @@ contract DEH {
         uint64 _withdrawalTimestamp = payouts[msg.sender].pendingPayments[recipient].timestamp.add(checkTimeWindow(msg.sender));
         uint64 _depositTimestamp = payouts[msg.sender].pendingPayments[recipient].timestamp;
         uint128 reward = 0;
+        uint64 rewardPercent = RuleSets[msg.sender].rewardPercent();
         if(value > 0 && _withdrawalTimestamp >= now ){
             emptyAccount(msg.sender, recipient);
-            if(_depositTimestamp.add(defaultDelayPeriod) > now ){ // Is cancellation still in default delay period range?
+            if(_depositTimestamp.add(RuleSets[msg.sender].defaultDelayPeriod()) > now ){ // Is cancellation still in default delay period range?
                 msg.sender.transfer(value);        
             }else if(rewardPercent > 0){ // else cancellation is possible due to delay, so reward validators
                 reward = value * rewardPercent / 100;
@@ -165,13 +168,13 @@ contract DEH {
                 msg.sender.transfer(value);
                 ValidatorServices[msg.sender].cancellationReward.value(reward)(delayPeriods[msg.sender].delayId);
             }
-            emit CancellingPayment(value, reward, _depositTimestamp.add(defaultDelayPeriod), uint64(now), recipient);
+            emit CancellingPayment(value, reward, _depositTimestamp.add(RuleSets[msg.sender].defaultDelayPeriod()), uint64(now), recipient);
             return true;
         }
         return true;
     }
 
-    function emptyAccount(address contractAddress, address recipient) internal returns(bool){
+    function emptyAccount(address contractAddress, address recipient) private returns(bool){
         payouts[contractAddress].pendingPayments[recipient].amount = 0;   
 
         uint64 swapIndex = uint64(payouts[contractAddress].pendingAddresses.length - 1);
@@ -187,7 +190,7 @@ contract DEH {
     }
 
     function () public payable {
-        revert();
+        revert("Payment made not via deposit function.");
     }
 }
 

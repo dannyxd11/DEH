@@ -1,8 +1,10 @@
 pragma solidity ^0.4.24;
 import "./MoneyControl.sol";
 
-// melonport 
-// securify
+/*
+* @title	Simple coin contract to demonstrate the use of the DEH system.
+* @author	Dan Whitehouse - https://github.com/dannyxd11
+*/
 contract Coin is MoneyControl{
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
@@ -11,8 +13,6 @@ contract Coin is MoneyControl{
     mapping (address => Account) public balances;
     address[] activeAccounts;     
     
-    // This is the constructor whose code is
-    // run only when the contract is created.
     constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) MoneyControl(_DEHAddress, _ValidatorService, _RuleSet) public {
         totalsupply = 100000000000000000;
         remainingsupply = 100000000000000000;
@@ -93,7 +93,6 @@ contract Coin is MoneyControl{
             deleteAccount(activeAccounts[i]);     
             remainingsupply = uint128(remainingsupply + amount / 10**6);
         }
-        // emit PerformingRecovery(addr);
     }
 
     // function approve() public {
@@ -127,7 +126,7 @@ contract Coin is MoneyControl{
                 if(balances[activeAccounts[i]].balance > totalsupply){break;}  // breaking early will cause next if statement to fail
                 supply = supply + balances[activeAccounts[i]].balance;
             }
-            if(supply + remainingsupply != totalsupply ){ return failsafe(); }
+            if(supply + remainingsupply != totalsupply ){return failsafe();}
         }
         return true;
     }
