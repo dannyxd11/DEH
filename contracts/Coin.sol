@@ -23,7 +23,7 @@ contract Coin is MoneyControl{
         uint64 index;
     }
 
-    function send_to(address account) public payable returns(bool){ // Allocate funds 
+    function send_to(address account) public payable returns(bool){ // Allocate funds         
         require(msg.value / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
         if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account) - 1);}
         balances[account].balance = balances[account].balance.add(uint128(msg.value));        
@@ -31,7 +31,7 @@ contract Coin is MoneyControl{
         return true;
     }
 
-    function buy() public payable returns(bool){
+    function buy() public payable returns(bool){        
         require(msg.value / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
         if(balances[msg.sender].balance == 0){balances[msg.sender].index = uint64(activeAccounts.push(msg.sender) - 1);}
         balances[msg.sender].balance = balances[msg.sender].balance.add(uint128(msg.value));        

@@ -14,8 +14,8 @@ contract MoneyControl is Ownable {
     address internal DEHAddress;
     DEH internal DEHInstance;        
     address internal recovery = 0xa66B994Fe08196c894E0d262822ed5538D9292CD; // Update with recovery address before deploying
-    bool private paymentsSuspended = false;
     bool private hasbeenrecovered = false;
+    bool private paymentsSuspended = false;
     uint256 nonce = 1;
 
     event Transaction(address recipient, uint256 value);        
@@ -46,8 +46,8 @@ contract MoneyControl is Ownable {
     }
 
     modifier paymentsAllowed(){
-        require(paymentsSuspended == false);
-        _;
+        require(paymentsSuspended == false, "Payments are suspended");
+        _;        
     }
 
     function transferViaDEH(address recipient, uint256 val) internal paymentsAllowed() returns(bool){
