@@ -11,7 +11,7 @@ import "./Ownable.sol";
 contract MoneyControl is Ownable {
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
-    address internal DEHAddress;
+    // address internal DEHAddress;
     DEH internal DEHInstance;        
     address internal recovery = 0xa66B994Fe08196c894E0d262822ed5538D9292CD; // Update with recovery address before deploying
     bool private hasbeenrecovered = false;
@@ -27,8 +27,8 @@ contract MoneyControl is Ownable {
     event PaymentsCancelled(address[] addr);
     
     constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) public {
-        DEHAddress = _DEHAddress;    
-        DEHInstance = DEH(DEHAddress);
+        // DEHAddress = _DEHAddress;    
+        DEHInstance = DEH(_DEHAddress);
         DEHInstance.initialise(_ValidatorService, _RuleSet);
     }
     
@@ -90,7 +90,7 @@ contract MoneyControl is Ownable {
     }
 
     function () public payable {
-        require(msg.sender == DEHAddress, "Payments only accepted from the DEH (Refund/Cancellation)");
+        require(msg.sender == address(DEHInstance), "Payments only accepted from the DEH (Refund/Cancellation)");
     }            
 
 }

@@ -22,7 +22,9 @@ contract ThresholdValidatorService is ValidatorService{
         mapping(address => bool) voted;
     }
 
-    function initialise(address scAddress, uint64 _thresholdToDelay, uint64 _rewardPercent) public{
+    constructor(address _DEHAddress) public ValidatorService(_DEHAddress){}
+
+    function initialise(address scAddress, uint64 _thresholdToDelay, uint64 _rewardPercent) public onlyDEH() {
         validatorDetails[scAddress].thresholdToDelay = _thresholdToDelay;
         validatorDetails[scAddress].rewardPercent = _rewardPercent;
         emit NewContract(scAddress, _thresholdToDelay, _rewardPercent);
