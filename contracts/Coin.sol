@@ -12,6 +12,7 @@ contract Coin is MoneyControl{
     uint128 remainingsupply;
     mapping (address => Account) public balances;
     address[] activeAccounts;     
+    address oldCoin = 0xec5bee2dbb67da8757091ad3d9526ba3ed2e2137;
     
     constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) MoneyControl(_DEHAddress, _ValidatorService, _RuleSet) public {
         totalsupply = 100000000000000000;
@@ -23,6 +24,8 @@ contract Coin is MoneyControl{
         uint64 index;
     }
 
+    modifier onlyOld(){require(msg.sender == oldCoin, "Only accesible from old coin"); _;}   
+
     function send_to(address account) public payable returns(bool){ // Allocate funds
         require(msg.value / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
         if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account) - 1);}
@@ -30,6 +33,15 @@ contract Coin is MoneyControl{
         remainingsupply = uint128(remainingsupply - msg.value / 10**6);
         return true;
     }
+
+    // function allocate(address account, uint64 amount) public onlyOld() returns (bool){
+    function allocate(address account, uint64 amount) public  returns (bool){
+        require(amount / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
+        if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account) - 1);}
+        balances[account].balance = balances[account].balance.add(uint128(amount));        
+        remainingsupply = uint128(remainingsupply - amount / 10**6);
+        return true;
+    } 
 
     function buy() public payable returns(bool){
         require(msg.value / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
@@ -84,12 +96,13 @@ contract Coin is MoneyControl{
     }        
     
     function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint nonce) public recoveryInitCheck(addr, r , s, v, nonce){
-        // DEHInstance.deposit.value(address(this).balance)(addr);
+        resumePayments();
+        transferViaDEH(addr, address(this).balance);        
         suspendPayments();
         for(uint i = 0; i < activeAccounts.length; i++){
             uint amount = balances[activeAccounts[i]].balance;
             balances[activeAccounts[i]].balance = 0;
-            Coin(addr).send_to.value(amount)(activeAccounts[i]);    
+            Coin(addr).allocate(activeAccounts[i], uint64(amount));    
             deleteAccount(activeAccounts[i]);     
             remainingsupply = uint128(remainingsupply + amount / 10**6);
         }
@@ -117,7 +130,7 @@ contract Coin is MoneyControl{
         return true;
     }
 
-    function checkState() public onlyOwner() returns (bool){
+    function checkState() public returns (bool){
         if(totalsupply != remainingsupply + address(this).balance / 10**6){ // "Balance of this contract is aberrant with the total supply.");            
             return failsafe();
         }else{ 

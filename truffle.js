@@ -15,10 +15,8 @@
  module.exports = {
       networks: {
         development: {
-          // host: "127.0.0.1",
-          host: "159.65.58.182",
-          // port: 7545,
-          port: 8545,
+          host: "127.0.0.1",
+          port: 7545,          
           network_id: "*", 
           gas: 4500000,
           from: '0xa66B994Fe08196c894E0d262822ed5538D9292CD'

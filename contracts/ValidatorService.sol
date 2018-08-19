@@ -20,7 +20,7 @@ contract ValidatorService{
     constructor(address _DEHAddress) public {DEHAddress = _DEHAddress;} 
     function initialise(address scAddress, uint64 validatorServiceParam, uint64 rewardPercent) public;
     function isValidator(address validator) public view returns (bool){  return validators[validator]; }
-    function submitDelayVote(address scAddress, address validator) public returns (bool);
+    function submitVote(address scAddress, address validator) public returns (bool);
     function startOrResetVote(address scAddress) public returns (bool);
     function isDelayed(address scAddress) public returns (int128);
     function cancellationReward(int _delayId) public payable returns (bool);

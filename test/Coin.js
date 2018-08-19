@@ -304,7 +304,4 @@ contract('Coin', async (accounts) => {
 	}).timeout(40000);
   
 
-	it("Owners should be able to initiate a failsafe to cancel pending payments.", async () => {	
-
-	}).timeout(40000);
 });

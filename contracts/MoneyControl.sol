@@ -55,6 +55,10 @@ contract MoneyControl is Ownable {
         return DEHInstance.deposit.value(val)(recipient);
     }
 
+    function withdrawFromDEH(address contractAddress) public returns(bool){
+        return DEHInstance.withdraw(contractAddress);
+    } 
+
     function checkPending(address recipient) public onlyOwner() returns (uint128){ 
         uint128 reward;
         uint128 value;

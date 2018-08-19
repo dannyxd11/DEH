@@ -140,7 +140,7 @@ contract DEH {
         ValidatorServices[contractAddress].startOrResetVote(contractAddress);
 
         // Add vote to delay
-        ValidatorServices[contractAddress].submitDelayVote(contractAddress, msg.sender);
+        ValidatorServices[contractAddress].submitVote(contractAddress, msg.sender);
         int128 delayId = ValidatorServices[contractAddress].isDelayed(contractAddress);
         //delayId = -1 if no delay.
         if(delayId > 0){        
