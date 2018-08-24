@@ -8,15 +8,14 @@ import "./MoneyControl.sol";
 contract Coin is MoneyControl{
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
-    uint128 totalsupply;
-    uint128 remainingsupply;
+    uint128 constant totalsupply = 100000000000000000000000;
+    uint128 internal remainingsupply;
     mapping (address => Account) public balances;
     address[] activeAccounts;     
     address oldCoin = 0xec5bee2dbb67da8757091ad3d9526ba3ed2e2137;
     
-    constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) MoneyControl(_DEHAddress, _ValidatorService, _RuleSet) public {
-        totalsupply = 100000000000000000000000;
-        remainingsupply = 100000000000000000000000;
+    constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) MoneyControl(_DEHAddress, _ValidatorService, _RuleSet) public {        
+        remainingsupply = totalsupply;
     }
 
     struct Account{
@@ -28,9 +27,9 @@ contract Coin is MoneyControl{
 
     function allocate(address account, uint64 amount) public  returns (bool){
         require(amount <= remainingsupply, "Not enough supply to complete purchase"); 
-        if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account) - 1);}
+        if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account)).sub(1);}
         balances[account].balance = balances[account].balance.add(uint128(amount));        
-        remainingsupply = uint128(remainingsupply - amount);
+        remainingsupply = remainingsupply.sub(uint128(amount));
         return true;
     } 
 
@@ -38,7 +37,7 @@ contract Coin is MoneyControl{
         require(msg.value <= remainingsupply, "Not enough supply to complete purchase"); 
         if(balances[msg.sender].balance == 0){balances[msg.sender].index = uint64(activeAccounts.push(msg.sender) - 1);}
         balances[msg.sender].balance = balances[msg.sender].balance.add(uint128(msg.value));        
-        remainingsupply = uint128(remainingsupply - msg.value);
+        remainingsupply = remainingsupply.sub(uint128(msg.value));
         return true;
     }
     
@@ -46,14 +45,14 @@ contract Coin is MoneyControl{
         require(balances[msg.sender].balance >= amountToSell, "Insufficient Funds");
         balances[msg.sender].balance = balances[msg.sender].balance.sub(amountToSell);
         if(balances[msg.sender].balance == 0){deleteAccount(msg.sender);}
-        remainingsupply = remainingsupply + amountToSell;
+        remainingsupply = remainingsupply.add(amountToSell);
         return transferViaDEH(msg.sender, amountToSell);                
     }
     
     function deleteAccount(address addr) internal returns(bool){
         require(balances[addr].balance == 0, "Account not empty before deletion");
 
-        uint64 swapIndex = uint64(activeAccounts.length - 1);
+        uint64 swapIndex = uint64(activeAccounts.length).sub(1);
         uint64 deleteIndex = balances[addr].index;
         address swapAddress = activeAccounts[swapIndex];
 
@@ -61,7 +60,7 @@ contract Coin is MoneyControl{
         balances[swapAddress].index = deleteIndex;        
         delete activeAccounts[swapIndex];
         delete balances[addr];
-        activeAccounts.length = activeAccounts.length - 1;        
+        activeAccounts.length = uint64(activeAccounts.length).sub(1);        
         return true;
     }
 
@@ -81,7 +80,7 @@ contract Coin is MoneyControl{
         if (balances[msg.sender].balance < amount) return;
         balances[msg.sender].balance = balances[msg.sender].balance.sub(amount);
         if(balances[msg.sender].balance == 0){deleteAccount(msg.sender);}
-        if(balances[receiver].balance == 0){balances[receiver].index = uint64(activeAccounts.push(receiver) - 1);}
+        if(balances[receiver].balance == 0){balances[receiver].index = uint64(activeAccounts.push(receiver)).sub(1);}
         balances[receiver].balance = balances[receiver].balance.add(amount);
         emit Sent(msg.sender, receiver, amount);
     }        
@@ -95,7 +94,7 @@ contract Coin is MoneyControl{
             balances[activeAccounts[i]].balance = 0;
             Coin(addr).allocate(activeAccounts[i], uint64(amount));    
             deleteAccount(activeAccounts[i]);     
-            remainingsupply = uint128(remainingsupply + amount);
+            remainingsupply = remainingsupply.add(uint128(amount));
         }
     }
 
@@ -114,7 +113,7 @@ contract Coin is MoneyControl{
             address addr = pending[i];            
             uint128 amountRefunded = checkPending(addr);            
             require(cancelPayment(addr));
-            if(balances[addr].balance == 0){balances[addr].index = uint64(activeAccounts.push(addr) - 1);}
+            if(balances[addr].balance == 0){balances[addr].index = uint64(activeAccounts.push(addr)).sub(1);}
             balances[addr].balance = balances[addr].balance.add(amountRefunded);            
         }
         emit PaymentsCancelled(pending);

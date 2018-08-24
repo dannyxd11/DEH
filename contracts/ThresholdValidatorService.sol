@@ -49,7 +49,7 @@ contract ThresholdValidatorService is ValidatorService{
             uint length = validatorDetails[scAddress].voters.length;
             validatorDetails[scAddress].voted[validatorDetails[scAddress].voters[length-1]] = false;
             delete validatorDetails[scAddress].voters[length-1];
-            validatorDetails[scAddress].voters.length = length - 1;
+            validatorDetails[scAddress].voters.length = uint64(length).sub(1);
         }
     }
 

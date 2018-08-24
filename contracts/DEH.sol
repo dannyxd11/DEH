@@ -111,7 +111,9 @@ contract DEH {
         Withdrawable memory temp_withdrawable = payouts[msg.sender].pendingPayments[recipient];
 
         if(temp_withdrawable.amount == 0){
-            temp_withdrawable.index = uint64(payouts[msg.sender].pendingAddresses.push(recipient)) - 1; 
+            uint index = payouts[msg.sender].pendingAddresses.push(recipient);
+            require(index < 2**64, "Pending addresses is too large");
+            temp_withdrawable.index = uint64(index).sub(1); 
         }        
         temp_withdrawable = Withdrawable(temp_withdrawable.amount.add(uint128(msg.value)),  uint64(now),  temp_withdrawable.index);
 
@@ -176,8 +178,8 @@ contract DEH {
 
     function emptyAccount(address contractAddress, address recipient) private returns(bool){
         payouts[contractAddress].pendingPayments[recipient].amount = 0;   
-
-        uint64 swapIndex = uint64(payouts[contractAddress].pendingAddresses.length - 1);
+        require(payouts[contractAddress].pendingAddresses.length > 0);
+        uint64 swapIndex = uint64(payouts[contractAddress].pendingAddresses.length).sub(1);
         uint64 deleteIndex = payouts[contractAddress].pendingPayments[msg.sender].index;
         address swapAddress = payouts[contractAddress].pendingAddresses[swapIndex];
 
@@ -185,7 +187,7 @@ contract DEH {
         payouts[contractAddress].pendingPayments[swapAddress].index = deleteIndex;        
         delete payouts[contractAddress].pendingAddresses[swapIndex];
         delete payouts[contractAddress].pendingPayments[recipient];
-        payouts[contractAddress].pendingAddresses.length = payouts[contractAddress].pendingAddresses.length - 1;        
+        payouts[contractAddress].pendingAddresses.length = uint64(payouts[contractAddress].pendingAddresses.length).sub(1);        
         return true;
     }
 
