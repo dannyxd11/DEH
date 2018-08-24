@@ -44,7 +44,7 @@ contract ThresholdValidatorService is ValidatorService{
         }
     }
 
-    function resetVoters(address scAddress) public returns (bool){        
+    function resetVoters(address scAddress) public  onlyDEH returns (bool){        
         for(uint i = 0; i < validatorDetails[scAddress].voters.length; i++ ){
             uint length = validatorDetails[scAddress].voters.length;
             validatorDetails[scAddress].voted[validatorDetails[scAddress].voters[length-1]] = false;
@@ -53,7 +53,7 @@ contract ThresholdValidatorService is ValidatorService{
         }
     }
 
-    function startOrResetVote(address scAddress) public returns (bool){
+    function startOrResetVote(address scAddress) public onlyDEH returns (bool){
         if(validatorDetails[scAddress].resetVotesTime < now){
             validatorDetails[scAddress].votes = 0;
             return resetVoters(scAddress);
@@ -61,7 +61,7 @@ contract ThresholdValidatorService is ValidatorService{
         return true;
     }
 
-    function isDelayed(address scAddress) public returns (int128){            
+    function isDelayed(address scAddress) public onlyDEH returns (int128){            
         if (validatorDetails[scAddress].votes > validatorDetails[scAddress].thresholdToDelay){
             delayId = delayId + 1;
             delayVoters[uint(delayId)] = validatorDetails[scAddress].voters;
@@ -70,7 +70,7 @@ contract ThresholdValidatorService is ValidatorService{
         return -1;        
     }    
 
-    function cancellationReward(int _delayId) public payable returns (bool){
+    function cancellationReward(int _delayId) public onlyDEH payable returns (bool){
         uint numberOfVoters = delayVoters[uint(_delayId)].length;
         require(numberOfVoters > 0);
         uint128 amountPerValidator = uint128(msg.value / numberOfVoters);
@@ -80,7 +80,7 @@ contract ThresholdValidatorService is ValidatorService{
         return true;
     }
 
-    function withdrawRewards() public returns (bool){
+    function withdrawRewards() public onlyValidator returns (bool){
         uint value = validatorPayouts[msg.sender];
         if(value > 0){
             validatorPayouts[msg.sender] = 0;

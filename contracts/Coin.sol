@@ -15,8 +15,8 @@ contract Coin is MoneyControl{
     address oldCoin = 0xec5bee2dbb67da8757091ad3d9526ba3ed2e2137;
     
     constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) MoneyControl(_DEHAddress, _ValidatorService, _RuleSet) public {
-        totalsupply = 100000000000000000;
-        remainingsupply = 100000000000000000;
+        totalsupply = 100000000000000000000000;
+        remainingsupply = 100000000000000000000000;
     }
 
     struct Account{
@@ -26,28 +26,19 @@ contract Coin is MoneyControl{
 
     modifier onlyOld(){require(msg.sender == oldCoin, "Only accesible from old coin"); _;}   
 
-    function send_to(address account) public payable returns(bool){ // Allocate funds
-        require(msg.value / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
-        if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account) - 1);}
-        balances[account].balance = balances[account].balance.add(uint128(msg.value));        
-        remainingsupply = uint128(remainingsupply - msg.value / 10**6);
-        return true;
-    }
-
-    // function allocate(address account, uint64 amount) public onlyOld() returns (bool){
     function allocate(address account, uint64 amount) public  returns (bool){
-        require(amount / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
+        require(amount <= remainingsupply, "Not enough supply to complete purchase"); 
         if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account) - 1);}
         balances[account].balance = balances[account].balance.add(uint128(amount));        
-        remainingsupply = uint128(remainingsupply - amount / 10**6);
+        remainingsupply = uint128(remainingsupply - amount);
         return true;
     } 
 
     function buy() public payable returns(bool){
-        require(msg.value / 10**6 <= remainingsupply, "Not enough supply to complete purchase"); 
+        require(msg.value <= remainingsupply, "Not enough supply to complete purchase"); 
         if(balances[msg.sender].balance == 0){balances[msg.sender].index = uint64(activeAccounts.push(msg.sender) - 1);}
         balances[msg.sender].balance = balances[msg.sender].balance.add(uint128(msg.value));        
-        remainingsupply = uint128(remainingsupply - msg.value / 10**6);
+        remainingsupply = uint128(remainingsupply - msg.value);
         return true;
     }
     
@@ -55,7 +46,7 @@ contract Coin is MoneyControl{
         require(balances[msg.sender].balance >= amountToSell, "Insufficient Funds");
         balances[msg.sender].balance = balances[msg.sender].balance.sub(amountToSell);
         if(balances[msg.sender].balance == 0){deleteAccount(msg.sender);}
-        remainingsupply = remainingsupply + amountToSell / 10**6;
+        remainingsupply = remainingsupply + amountToSell;
         return transferViaDEH(msg.sender, amountToSell);                
     }
     
@@ -104,7 +95,7 @@ contract Coin is MoneyControl{
             balances[activeAccounts[i]].balance = 0;
             Coin(addr).allocate(activeAccounts[i], uint64(amount));    
             deleteAccount(activeAccounts[i]);     
-            remainingsupply = uint128(remainingsupply + amount / 10**6);
+            remainingsupply = uint128(remainingsupply + amount);
         }
     }
 
@@ -131,7 +122,7 @@ contract Coin is MoneyControl{
     }
 
     function checkState() public returns (bool){
-        if(totalsupply != remainingsupply + address(this).balance / 10**6){ // "Balance of this contract is aberrant with the total supply.");            
+        if(totalsupply != remainingsupply + address(this).balance){ // "Balance of this contract is aberrant with the total supply.");            
             return failsafe();
         }else{ 
             uint supply = 0; // Check the balance in all accounts and remaining supply equals total supply

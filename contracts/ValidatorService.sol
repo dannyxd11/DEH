@@ -15,14 +15,14 @@ contract ValidatorService{
     mapping(address => uint128) validatorPayouts;
     int128 delayId = 1;
     
-    modifier onlyDEH(){require(msg.sender == DEHAddress, "This can only be done from the DEH"); _;}
-
+    modifier onlyDEH(){require(msg.sender == DEHAddress, "This can only be done from the DEH."); _;}
+    modifier onlyValidator(){require(isValidator(msg.sender) == true, "Must be a validator to do this."); _;}
     constructor(address _DEHAddress) public {DEHAddress = _DEHAddress;} 
-    function initialise(address scAddress, uint64 validatorServiceParam, uint64 rewardPercent) public;
+    function initialise(address scAddress, uint64 validatorServiceParam, uint64 rewardPercent) public onlyDEH;
     function isValidator(address validator) public view returns (bool){  return validators[validator]; }
     function submitVote(address scAddress, address validator) public returns (bool);
-    function startOrResetVote(address scAddress) public returns (bool);
-    function isDelayed(address scAddress) public returns (int128);
-    function cancellationReward(int _delayId) public payable returns (bool);
+    function startOrResetVote(address scAddress) public onlyDEH returns (bool);
+    function isDelayed(address scAddress) public onlyDEH returns (int128);
+    function cancellationReward(int _delayId) public onlyDEH payable returns (bool);
     function withdrawRewards() public returns (bool);
 }
