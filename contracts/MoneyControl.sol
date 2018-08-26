@@ -13,10 +13,9 @@ contract MoneyControl is Ownable {
     using SafeMath64 for uint64;
     // address internal DEHAddress;
     DEH internal DEHInstance;        
-    address internal recovery = 0xa66B994Fe08196c894E0d262822ed5538D9292CD; // Update with recovery address before deploying
-    bool private hasbeenrecovered = false;
+    address internal recovery = 0xa66B994Fe08196c894E0d262822ed5538D9292CD; // Update with recovery address before deploying    
     bool private paymentsSuspended = false;
-    uint256 nonce = 1;
+    uint256 public nonce = 1;
 
     event Transaction(address recipient, uint256 value);        
     event Sent(address from, address to, uint256 amount);
@@ -25,6 +24,8 @@ contract MoneyControl is Ownable {
     event PaymentsSuspended();
     event PaymentsResumed();    
     event PaymentsCancelled(address[] addr);
+    event PartialPaymentsCancelled();
+    event PartialRecovery();
     
     constructor(address _DEHAddress, address _ValidatorService, address _RuleSet) public {
         // DEHAddress = _DEHAddress;    
@@ -33,16 +34,15 @@ contract MoneyControl is Ownable {
     }
     
     modifier recoveryInitCheck(address addr, bytes32 r, bytes32 s, uint8 v, uint256 _nonce){
-        require(_nonce > nonce, "Nonce has been reused");
-        require(hasbeenrecovered == false, "Recovey should only be performed once.");
+        require(_nonce > nonce, "Nonce has been reused");        
         nonce = _nonce;
         bytes32 calculatedHash = keccak256(abi.encodePacked(addr, _nonce));        
         if(ecrecover(calculatedHash, v, r, s) == recovery){                                            
-            emit PerformingRecovery(addr);
-            hasbeenrecovered = true;
+            emit PerformingRecovery(addr);            
             _;            
+        }else{
+            emit FailedRecovery(calculatedHash, nonce);
         }
-        emit FailedRecovery(calculatedHash, nonce);
     }
 
     modifier paymentsAllowed(){
@@ -79,7 +79,7 @@ contract MoneyControl is Ownable {
     }    
        
     function failsafe() public onlyOwner() returns(bool); 
-    function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint _nonce) public recoveryInitCheck( addr, r, s, v, _nonce);
+    function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint _nonce) public recoveryInitCheck( addr, r, s, v, _nonce) returns(bool);
 
     function suspendPayments() internal returns (bool){
         paymentsSuspended = true;

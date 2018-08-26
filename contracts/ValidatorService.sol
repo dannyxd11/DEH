@@ -17,7 +17,7 @@ contract ValidatorService{
     
     modifier onlyDEH(){require(msg.sender == DEHAddress, "This can only be done from the DEH."); _;}
     modifier onlyValidator(){require(isValidator(msg.sender) == true, "Must be a validator to do this."); _;}
-    constructor(address _DEHAddress) public {DEHAddress = _DEHAddress;} 
+    constructor(address _DEHAddress) public {require(address(0) != _DEHAddress,"Must provide DEH address"); DEHAddress = _DEHAddress;} 
     function initialise(address scAddress, uint64 validatorServiceParam, uint64 rewardPercent) public onlyDEH;
     function isValidator(address validator) public view returns (bool){  return validators[validator]; }
     function submitVote(address scAddress, address validator) public returns (bool);

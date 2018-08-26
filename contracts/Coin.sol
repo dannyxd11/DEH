@@ -10,7 +10,7 @@ contract Coin is MoneyControl{
     using SafeMath64 for uint64;
     uint128 constant totalsupply = 100000000000000000000000;
     uint128 internal remainingsupply;
-    mapping (address => Account) public balances;
+    mapping (address => Account) balances;
     address[] activeAccounts;     
     address oldCoin = 0xec5bee2dbb67da8757091ad3d9526ba3ed2e2137;
     
@@ -25,10 +25,10 @@ contract Coin is MoneyControl{
 
     modifier onlyOld(){require(msg.sender == oldCoin, "Only accesible from old coin"); _;}   
 
-    function allocate(address account, uint64 amount) public  returns (bool){
+    function allocate(address account, uint128 amount) public onlyOld returns (bool){
         require(amount <= remainingsupply, "Not enough supply to complete purchase"); 
         if(balances[account].balance == 0){balances[account].index = uint64(activeAccounts.push(account)).sub(1);}
-        balances[account].balance = balances[account].balance.add(uint128(amount));        
+        balances[account].balance = balances[account].balance.add(amount);        
         remainingsupply = remainingsupply.sub(uint128(amount));
         return true;
     } 
@@ -85,17 +85,20 @@ contract Coin is MoneyControl{
         emit Sent(msg.sender, receiver, amount);
     }        
     
-    function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint nonce) public recoveryInitCheck(addr, r , s, v, nonce){
+    function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint nonce) public recoveryInitCheck(addr, r , s, v, nonce) returns(bool){
         resumePayments();
         transferViaDEH(addr, address(this).balance);        
         suspendPayments();
         for(uint i = 0; i < activeAccounts.length; i++){
-            uint amount = balances[activeAccounts[i]].balance;
+            if(msg.gas < 50000){emit PartialRecovery(); return false;}
+            uint128 amount = balances[activeAccounts[i]].balance;
             balances[activeAccounts[i]].balance = 0;
-            Coin(addr).allocate(activeAccounts[i], uint64(amount));    
-            deleteAccount(activeAccounts[i]);     
+            Coin(addr).allocate(activeAccounts[i], amount);    
+            // deleteAccount(activeAccounts[i]);     
+            emit Sent(addr, activeAccounts[i], amount);
             remainingsupply = remainingsupply.add(uint128(amount));
         }
+        return true;
     }
 
     // function approve() public {
@@ -108,15 +111,16 @@ contract Coin is MoneyControl{
      */
     function failsafe() public onlyOwner() returns (bool){
         suspendPayments();
-        address[] memory pending = getPendingPayments();        
+        address[] memory pending = getPendingPayments();             
         for(uint i = 0; i < pending.length; i++){
+            if(msg.gas < 50000){emit PartialPaymentsCancelled(); return false;}
             address addr = pending[i];            
             uint128 amountRefunded = checkPending(addr);            
             require(cancelPayment(addr));
             if(balances[addr].balance == 0){balances[addr].index = uint64(activeAccounts.push(addr)).sub(1);}
             balances[addr].balance = balances[addr].balance.add(amountRefunded);            
         }
-        emit PaymentsCancelled(pending);
+        // emit PaymentsCancelled(pending);
         return true;
     }
 

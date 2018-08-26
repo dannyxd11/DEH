@@ -24,7 +24,7 @@ contract DEH {
     event Withdrawal(address contractAddress, address recipient, uint128 value);
     event DelayTriggered(address contractAddress, uint64 delayAmount, address validator);
     event EarlyWithdrawalAttempt(address contractAddress, address recipient);    
-    event CancellingPayment(uint128 value, uint128 reward, uint64 timestamp, uint64 _now, address recipient);
+    event CancellingPayment(uint128 value, uint128 reward, address recipient);
 
     struct Withdrawable{
         uint128 amount;
@@ -164,14 +164,15 @@ contract DEH {
             emptyAccount(msg.sender, recipient);
             if(_depositTimestamp.add(RuleSets[msg.sender].defaultDelayPeriod()) > now ){ // Is cancellation still in default delay period range?
                 msg.sender.transfer(value);        
-            }else if(rewardPercent > 0){ // else cancellation is possible due to delay, so reward validators
+            }else if(rewardPercent > 0 && rewardPercent < 100){ // else cancellation is possible due to delay, so reward validators
                 reward = value * rewardPercent / 100;
                 value = value.sub(reward);                
                 msg.sender.transfer(value);
                 ValidatorServices[msg.sender].cancellationReward.value(reward)(delayPeriods[msg.sender].delayId);
+            }else{
+                return false;
             }
-            emit CancellingPayment(value, reward, _depositTimestamp.add(RuleSets[msg.sender].defaultDelayPeriod()), uint64(now), recipient);
-            return true;
+            emit CancellingPayment(value, reward, recipient);            
         }
         return true;
     }
