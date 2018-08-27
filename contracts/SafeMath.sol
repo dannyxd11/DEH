@@ -1,16 +1,17 @@
-pragma solidity ^0.4.21;
+pragma solidity 0.4.24;
 
 /*
 * 
 * @author	Dan Whitehouse - https://github.com/dannyxd11 - 
-*   Modified from OpenZeppelen -  https://github.com/OpenZeppelin/openzeppelin-solidity/blob/master/contracts/math/SafeMath.sol
+*   Modified from OpenZeppelen -  
+*   https://github.com/OpenZeppelin/openzeppelin-solidity/blob/master/contracts/math/SafeMath.sol
 */
+
 /**
  * @title SafeMath
  * @dev Math operations with safety checks that throw on error
  */
 library SafeMath64 {
-
     /**
     * @dev Multiplies two numbers, throws on overflow.
     */
@@ -54,6 +55,7 @@ library SafeMath64 {
         return c;
     }
 }
+
 
 library SafeMath128 {
     /** Creating 128bit and 64bit versions

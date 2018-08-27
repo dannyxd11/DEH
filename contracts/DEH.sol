@@ -1,18 +1,21 @@
-pragma solidity ^0.4.21;
+pragma solidity 0.4.24;
 
 import "./SafeMath.sol";
 import "./ValidatorService.sol";
 import "./RuleSet.sol";
 
 /*
-* @title	Decentralised Escapse Hatch to temporarily esgrow funds between two paries allowing reversal during a certain grace period.
+* @title	Decentralised Escapse Hatch to temporarily esgrow funds between 
+*           two paries allowing reversal during a certain grace period.
 * @author	Dan Whitehouse - https://github.com/dannyxd11
 */
+
 contract DEH {
-    mapping(address => Payments) payouts;
-    mapping(address => ContractDelay) delayPeriods;
-    mapping(address => ValidatorService) ValidatorServices;    
-    mapping(address => RuleSet) RuleSets;
+
+    mapping(address => Payments) internal payouts;
+    mapping(address => ContractDelay) internal delayPeriods;
+    mapping(address => ValidatorService) internal validatorServices;    
+    mapping(address => RuleSet) internal ruleSets;
 
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
@@ -26,47 +29,44 @@ contract DEH {
     event EarlyWithdrawalAttempt(address contractAddress, address recipient);    
     event CancellingPayment(uint128 value, uint128 reward, address recipient);
 
-    struct Withdrawable{
+    struct Withdrawable {
         uint128 amount;
         uint64 timestamp;
         uint64 index;
     }
     
-    struct ContractDelay{
+    struct ContractDelay {
         uint64 period;
         uint64 resetTime;        
         int128 delayId;
     }
     
-    struct Payments{
+    struct Payments {
         bool initalised;
         address[] pendingAddresses;
         mapping(address => Withdrawable) pendingPayments;
     }
 
-    modifier onlyValidators(address contractAddress){
-        require(ValidatorServices[contractAddress].isValidator(msg.sender) == true, "Sender is not a validator.");
+    modifier onlyValidators(address contractAddress) {
+        require(validatorServices[contractAddress].isValidator(msg.sender) == true, "Sender is not a validator.");
         _;  
     }
 
-    modifier onlyInitialised(){
+    modifier onlyInitialised() {
         require(payouts[msg.sender].initalised == true, "Validator Service and Rule Set have not been initialised");
         _;
     }
     
-    function checkTimeWindow(address contractAddress) private returns(uint64){
-        uint64 temp_delay = RuleSets[contractAddress].defaultDelayPeriod();
-        ContractDelay storage temp_SC_delay = delayPeriods[contractAddress];
-        if(temp_SC_delay.period == 0 || (now > temp_SC_delay.resetTime && temp_SC_delay.period != temp_delay)){
-            temp_SC_delay.period = temp_delay;
-            temp_SC_delay.resetTime = 0;
-        }
-        return temp_SC_delay.period;
+    function () 
+    public payable {
+        revert("Payment made not via deposit function.");
     }
-    
-    function withdraw(address contractAddress) public returns(bool){   
+
+    function withdraw(address contractAddress) 
+    public 
+    returns(bool) {   
         Withdrawable temp = payouts[contractAddress].pendingPayments[msg.sender]; 
-        if(temp.amount > 0 && temp.timestamp.add(checkTimeWindow(contractAddress)) < now ){
+        if (temp.amount > 0 && temp.timestamp.add(checkTimeWindow(contractAddress)) < now) {
             uint128 ammountToTransfer = temp.amount;
             emptyAccount(contractAddress, msg.sender);                
             emit Withdrawal(contractAddress, msg.sender, ammountToTransfer);
@@ -76,28 +76,36 @@ contract DEH {
         emit EarlyWithdrawalAttempt(contractAddress, msg.sender);
         return false;
     }
-    
-    function checkWithdrawable(address contractAddress) public view returns(uint128){
+
+    function checkWithdrawable(address contractAddress) 
+    public view 
+    returns(uint128) {
         return payouts[contractAddress].pendingPayments[msg.sender].amount;
     }
 
-    function checkWithdrawableAsContract(address recipient) public returns(uint128, uint128){
+    function checkWithdrawableAsContract(address recipient) 
+    public 
+    returns(uint128, uint128) {
         uint128 value = payouts[msg.sender].pendingPayments[recipient].amount;
-        uint64 _withdrawalTimestamp = payouts[msg.sender].pendingPayments[recipient].timestamp.add(checkTimeWindow(msg.sender));
+        uint64 _withdrawalTimestamp = payouts[msg.sender]
+            .pendingPayments[recipient]
+            .timestamp.add(checkTimeWindow(msg.sender));
         uint64 _depositTimestamp = payouts[msg.sender].pendingPayments[recipient].timestamp;
         uint128 reward = 0;
-        uint64 rewardPercent = RuleSets[msg.sender].rewardPercent();
-        if(value > 0 && _withdrawalTimestamp >= now ){
-            if(rewardPercent > 0 && _depositTimestamp.add(RuleSets[msg.sender].defaultDelayPeriod()) <= now ){ 
+        uint64 rewardPercent = ruleSets[msg.sender].REWARD_PERCENT();
+        if (value > 0 && _withdrawalTimestamp >= now) {
+            if (rewardPercent > 0 && _depositTimestamp.add(ruleSets[msg.sender].DEFAULT_DELAY_PERIOD()) <= now) { 
                 reward = value * rewardPercent / 100;
                 value = value.sub(reward);                                                
             }            
             return (value, reward);
         }        
-        return (0,0);
+        return (0, 0);
     }
 
-    function pendingPayments() public view returns(address[]){
+    function pendingPayments() 
+    public view 
+    returns(address[]) {
         return payouts[msg.sender].pendingAddresses;
     }
 
@@ -105,47 +113,58 @@ contract DEH {
      * @notice	Explain to a user what a function does	contract, interface, function
      * @dev	    Explain to a developer any extra details	contract, interface, function
      * @param	recipient - address of which to allocate the amount sent to allowing withdrawal later.
-     * @return  Returns True indicating success
+     * @return  
+    returns True indicating success
      */
-    function deposit(address recipient) public payable onlyInitialised() returns(bool){        
-        Withdrawable memory temp_withdrawable = payouts[msg.sender].pendingPayments[recipient];
+    function deposit(address recipient) 
+    public payable onlyInitialised() 
+    returns(bool) {        
+        Withdrawable memory tempWithdrawable = payouts[msg.sender].pendingPayments[recipient];
 
-        if(temp_withdrawable.amount == 0){
+        if (tempWithdrawable.amount == 0) {
             uint index = payouts[msg.sender].pendingAddresses.push(recipient);
             require(index < 2**64, "Pending addresses is too large");
-            temp_withdrawable.index = uint64(index).sub(1); 
+            tempWithdrawable.index = uint64(index).sub(1); 
         }        
-        temp_withdrawable = Withdrawable(temp_withdrawable.amount.add(uint128(msg.value)),  uint64(now),  temp_withdrawable.index);
+        tempWithdrawable = Withdrawable(tempWithdrawable.amount.add(uint128(msg.value)), 
+            uint64(now), tempWithdrawable.index);
 
-        payouts[msg.sender].pendingPayments[recipient] = temp_withdrawable;
+        payouts[msg.sender].pendingPayments[recipient] = tempWithdrawable;
         emit Deposit(msg.sender, msg.sender, uint128(msg.value));
         return true;
     }
     
-    function initialise(address validatorServiceAddress, address RuleSetAddress) public returns(bool){
-        ValidatorServices[msg.sender] = ValidatorService(validatorServiceAddress);
-        RuleSets[msg.sender] = RuleSet(RuleSetAddress);
-        ValidatorServices[msg.sender].initialise(msg.sender, RuleSets[msg.sender].validatorServiceParam(), RuleSets[msg.sender].rewardPercent());
+    function initialise(address validatorServiceAddress, address ruleSetAddress) 
+    public 
+    returns(bool) {
+        validatorServices[msg.sender] = ValidatorService(validatorServiceAddress);
+        ruleSets[msg.sender] = RuleSet(ruleSetAddress);
+        validatorServices[msg.sender].initialise(msg.sender, 
+            ruleSets[msg.sender].VALIDATOR_SERVICE_PARAM(), 
+            ruleSets[msg.sender].REWARD_PERCENT());
         payouts[msg.sender].initalised = true;  
         return true;
     }
 
-    function delayPayments(address contractAddress) public onlyValidators(contractAddress) returns(bool){
-        uint64 delay = RuleSets[contractAddress].validatorDelayPeriod();
+    function delayPayments(address contractAddress) 
+    public onlyValidators(contractAddress) 
+    returns(bool) {
+        uint64 delay = ruleSets[contractAddress].VALIDATOR_DELAY_PERIOD();
 
         // Currently already in a delay, so ignore
-        if (delayPeriods[contractAddress].period > RuleSets[contractAddress].defaultDelayPeriod() && delayPeriods[contractAddress].resetTime > now){
+        if (delayPeriods[contractAddress].period > ruleSets[contractAddress].DEFAULT_DELAY_PERIOD() && 
+            delayPeriods[contractAddress].resetTime > now) {
             return false;
         }
 
         // If previous vote has expired, reset votes
-        ValidatorServices[contractAddress].startOrResetVote(contractAddress);
+        validatorServices[contractAddress].startOrResetVote(contractAddress);
 
         // Add vote to delay
-        ValidatorServices[contractAddress].submitVote(contractAddress, msg.sender);
-        int128 delayId = ValidatorServices[contractAddress].isDelayed(contractAddress);
+        validatorServices[contractAddress].submitVote(contractAddress, msg.sender);
+        int128 delayId = validatorServices[contractAddress].isDelayed(contractAddress);
         //delayId = -1 if no delay.
-        if(delayId > 0){        
+        if (delayId > 0) {        
             delayPeriods[contractAddress].period = delay;
             delayPeriods[contractAddress].resetTime = uint64(now).add(delay);
             delayPeriods[contractAddress].delayId = delayId;
@@ -154,22 +173,25 @@ contract DEH {
         return true;
     }
     
-    function cancelPayment(address recipient) public returns(bool){
+    function cancelPayment(address recipient) 
+    public 
+    returns(bool) {
         uint128 value = payouts[msg.sender].pendingPayments[recipient].amount;
-        uint64 _withdrawalTimestamp = payouts[msg.sender].pendingPayments[recipient].timestamp.add(checkTimeWindow(msg.sender));
+        uint64 _withdrawalTimestamp = payouts[msg.sender].pendingPayments[recipient]
+            .timestamp.add(checkTimeWindow(msg.sender));
         uint64 _depositTimestamp = payouts[msg.sender].pendingPayments[recipient].timestamp;
         uint128 reward = 0;
-        uint64 rewardPercent = RuleSets[msg.sender].rewardPercent();
-        if(value > 0 && _withdrawalTimestamp >= now ){
+        uint64 rewardPercent = ruleSets[msg.sender].REWARD_PERCENT();
+        if (value > 0 && _withdrawalTimestamp >= now) {
             emptyAccount(msg.sender, recipient);
-            if(_depositTimestamp.add(RuleSets[msg.sender].defaultDelayPeriod()) > now ){ // Is cancellation still in default delay period range?
+            if (_depositTimestamp.add(ruleSets[msg.sender].DEFAULT_DELAY_PERIOD()) > now) {
                 msg.sender.transfer(value);        
-            }else if(rewardPercent > 0 && rewardPercent < 100){ // else cancellation is possible due to delay, so reward validators
+            } else if (rewardPercent > 0 && rewardPercent < 100) {
                 reward = value * rewardPercent / 100;
                 value = value.sub(reward);                
                 msg.sender.transfer(value);
-                ValidatorServices[msg.sender].cancellationReward.value(reward)(delayPeriods[msg.sender].delayId);
-            }else{
+                validatorServices[msg.sender].cancellationReward.value(reward)(delayPeriods[msg.sender].delayId);
+            } else {
                 return false;
             }
             emit CancellingPayment(value, reward, recipient);            
@@ -177,7 +199,21 @@ contract DEH {
         return true;
     }
 
-    function emptyAccount(address contractAddress, address recipient) private returns(bool){
+    function checkTimeWindow(address contractAddress) 
+    private 
+    returns(uint64) {
+        uint64 tempDelay = ruleSets[contractAddress].DEFAULT_DELAY_PERIOD();
+        ContractDelay storage tempSCDelay = delayPeriods[contractAddress];
+        if (tempSCDelay.period == 0 || (now > tempSCDelay.resetTime && tempSCDelay.period != tempDelay)) {
+            tempSCDelay.period = tempDelay;
+            tempSCDelay.resetTime = 0;
+        }
+        return tempSCDelay.period;
+    }
+    
+    function emptyAccount(address contractAddress, address recipient) 
+    private 
+    returns(bool) {
         payouts[contractAddress].pendingPayments[recipient].amount = 0;   
         require(payouts[contractAddress].pendingAddresses.length > 0);
         uint64 swapIndex = uint64(payouts[contractAddress].pendingAddresses.length).sub(1);
@@ -188,12 +224,9 @@ contract DEH {
         payouts[contractAddress].pendingPayments[swapAddress].index = deleteIndex;        
         delete payouts[contractAddress].pendingAddresses[swapIndex];
         delete payouts[contractAddress].pendingPayments[recipient];
-        payouts[contractAddress].pendingAddresses.length = uint64(payouts[contractAddress].pendingAddresses.length).sub(1);        
+        payouts[contractAddress].pendingAddresses.length = uint64(payouts[contractAddress]
+            .pendingAddresses.length).sub(1);        
         return true;
-    }
-
-    function () public payable {
-        revert("Payment made not via deposit function.");
     }
 }
 

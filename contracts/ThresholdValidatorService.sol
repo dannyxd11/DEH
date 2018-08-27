@@ -1,4 +1,4 @@
-pragma solidity ^0.4.21;
+pragma solidity 0.4.24;
 
 import "./SafeMath.sol";
 import "./ValidatorService.sol";
@@ -7,13 +7,17 @@ import "./ValidatorService.sol";
 * @title	Validator service that uses a simple threshold to determine whether a contracts transactions should be delayed.
 * @author	Dan Whitehouse - https://github.com/dannyxd11
 */
-contract ThresholdValidatorService is ValidatorService{
+
+contract ThresholdValidatorService is ValidatorService {
+
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
-    mapping(address => SCValidation) validatorDetails;
+
+    mapping(address => SCValidation) internal validatorDetails;
 
     event NewContract(address scAddress, uint64 threshold, uint64 reward);
-    struct SCValidation{        
+
+    struct SCValidation {        
         uint64 thresholdToDelay;        
         uint64 votes;
         uint64 resetVotesTime;
@@ -22,30 +26,36 @@ contract ThresholdValidatorService is ValidatorService{
         mapping(address => bool) voted;
     }
 
-    constructor(address _DEHAddress) public ValidatorService(_DEHAddress){}
+    constructor(address _dehAddress) 
+    public ValidatorService(_dehAddress) {}
 
-    function initialise(address scAddress, uint64 _thresholdToDelay, uint64 _rewardPercent) public onlyDEH() {
+    function initialise(address scAddress, uint64 _thresholdToDelay, uint64 _rewardPercent) 
+    public onlyDEH() {
         validatorDetails[scAddress].thresholdToDelay = _thresholdToDelay;
         validatorDetails[scAddress].rewardPercent = _rewardPercent;
         emit NewContract(scAddress, _thresholdToDelay, _rewardPercent);
     }
 
-    function submitVote(address scAddress, address validator) public onlyDEH returns (bool){        
-        if(validatorDetails[scAddress].votes == 0){
+    function submitVote(address scAddress, address validator) 
+    public onlyDEH 
+    returns (bool) {        
+        if (validatorDetails[scAddress].votes == 0) {
             validatorDetails[scAddress].resetVotesTime = uint64(now).add(60*60); // What time should this be
         }
-        if(validatorDetails[scAddress].voted[validator] == false){
+        if (validatorDetails[scAddress].voted[validator] == false) {
             validatorDetails[scAddress].votes = validatorDetails[scAddress].votes.add(1);
             validatorDetails[scAddress].voters.push(validator);
             validatorDetails[scAddress].voted[validator] = true;
             return true;
-        }else{
+        } else {
             return false;
         }
     }
 
-    function resetVoters(address scAddress) public  onlyDEH returns (bool){        
-        for(uint i = 0; i < validatorDetails[scAddress].voters.length; i++ ){
+    function resetVoters(address scAddress) 
+    public  onlyDEH 
+    returns (bool) {        
+        for (uint i = 0; i < validatorDetails[scAddress].voters.length; i++) {
             uint length = validatorDetails[scAddress].voters.length;
             validatorDetails[scAddress].voted[validatorDetails[scAddress].voters[length-1]] = false;
             delete validatorDetails[scAddress].voters[length-1];
@@ -53,16 +63,20 @@ contract ThresholdValidatorService is ValidatorService{
         }
     }
 
-    function startOrResetVote(address scAddress) public onlyDEH returns (bool){
-        if(validatorDetails[scAddress].resetVotesTime < now){
+    function startOrResetVote(address scAddress) 
+    public onlyDEH 
+    returns (bool) {
+        if (validatorDetails[scAddress].resetVotesTime < now) {
             validatorDetails[scAddress].votes = 0;
             return resetVoters(scAddress);
         }
         return true;
     }
 
-    function isDelayed(address scAddress) public onlyDEH returns (int128){            
-        if (validatorDetails[scAddress].votes > validatorDetails[scAddress].thresholdToDelay){
+    function isDelayed(address scAddress) 
+    public onlyDEH 
+    returns (int128) {            
+        if (validatorDetails[scAddress].votes > validatorDetails[scAddress].thresholdToDelay) {
             delayId = delayId + 1;
             delayVoters[uint(delayId)] = validatorDetails[scAddress].voters;
             return delayId;
@@ -70,19 +84,24 @@ contract ThresholdValidatorService is ValidatorService{
         return -1;        
     }    
 
-    function cancellationReward(int _delayId) public onlyDEH payable returns (bool){
+    function cancellationReward(int _delayId) 
+    public onlyDEH payable 
+    returns (bool) {
         uint numberOfVoters = delayVoters[uint(_delayId)].length;
         require(numberOfVoters > 0);
         uint128 amountPerValidator = uint128(msg.value / numberOfVoters);
-        for (uint i = 0; i < numberOfVoters; i++){
-            validatorPayouts[delayVoters[uint(_delayId)][i]] = validatorPayouts[delayVoters[uint(_delayId)][i]].add(amountPerValidator);            
+        for (uint i = 0; i < numberOfVoters; i++) {
+            validatorPayouts[delayVoters[uint(_delayId)][i]] = 
+                validatorPayouts[delayVoters[uint(_delayId)][i]].add(amountPerValidator);            
         }
         return true;
     }
 
-    function withdrawRewards() public onlyValidator returns (bool){
+    function withdrawRewards() 
+    public onlyValidator 
+    returns (bool) {
         uint value = validatorPayouts[msg.sender];
-        if(value > 0){
+        if (value > 0) {
             validatorPayouts[msg.sender] = 0;
             msg.sender.transfer(value);
             return true;
@@ -90,12 +109,16 @@ contract ThresholdValidatorService is ValidatorService{
         return false;
     }
 
-    function appointValidator(address validatorAddress) public returns (bool){
+    function appointValidator(address validatorAddress) 
+    public 
+    returns (bool) {
         validators[validatorAddress] = true;
         return true;
     }
 
-    function revokeValidator(address validatorAddress) public returns (bool){
+    function revokeValidator(address validatorAddress) 
+    public 
+    returns (bool) {
         validators[validatorAddress] = false;                
         return true;
     }    
