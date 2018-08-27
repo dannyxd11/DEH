@@ -30,7 +30,7 @@ contract ThresholdValidatorService is ValidatorService{
         emit NewContract(scAddress, _thresholdToDelay, _rewardPercent);
     }
 
-    function submitVote(address scAddress, address validator) public returns (bool){        
+    function submitVote(address scAddress, address validator) public onlyDEH returns (bool){        
         if(validatorDetails[scAddress].votes == 0){
             validatorDetails[scAddress].resetVotesTime = uint64(now).add(60*60); // What time should this be
         }
