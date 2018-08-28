@@ -19,10 +19,7 @@ contract DEH {
 
     using SafeMath128 for uint128;
     using SafeMath64 for uint64;
-    
-    // todo - method for MC to reset graceperiod after 'panic' mode.
-    // todo - method to prevent a single validator from DOSing
-    
+
     event Deposit(address indexed contractAddress, address indexed recipient, uint128 indexed value);
     event Withdrawal(address contractAddress, address recipient, uint128 value);
     event DelayTriggered(address contractAddress, uint64 delayAmount, address validator);
@@ -57,11 +54,19 @@ contract DEH {
         _;
     }
     
+    /*
+     * @notice	Only accepts payments via the deposit function, not fallback
+     */
     function () 
     public payable {
         revert("Payment made not via deposit function.");
     }
 
+    /*
+     * @notice	Used by recipients to withdraw any  pending payments     
+     * @param	contractAddress - address of smart contract to retrieve balance from.
+     * @return  returns True indicating success, False if early attempt
+     */
     function withdraw(address contractAddress) 
     public 
     returns(bool) {   
@@ -77,12 +82,24 @@ contract DEH {
         return false;
     }
 
+    /*
+     * @notice	Used by recipients to see how much they can withdraw from a given smart contract     
+     * @param	address of account to look up withdrawable balance for
+     * @return  returns uint for value
+     */
     function checkWithdrawable(address contractAddress) 
     public view 
     returns(uint128) {
         return payouts[contractAddress].pendingPayments[msg.sender].amount;
     }
 
+    /*
+     * @notice	Used by smart contract to see how much will be refunded for an account
+     * @dev	    Same as cancel payment, but without updating state/transferring funds
+     * @param	recipient - address of account to look up. Smart contract can only look at 
+     *          accounts for its own contract
+     * @return  returns (value, reward) to the smart contract
+     */
     function checkWithdrawableAsContract(address recipient) 
     public 
     returns(uint128, uint128) {
@@ -103,6 +120,10 @@ contract DEH {
         return (0, 0);
     }
 
+    /*
+     * @notice	Used by smart contract to see addresses that have not withdrawn funds for msg.sender contract     
+     * @return  returns address array of pending accounts
+     */
     function pendingPayments() 
     public view 
     returns(address[]) {
@@ -110,11 +131,11 @@ contract DEH {
     }
 
     /*
-     * @notice	Explain to a user what a function does	contract, interface, function
-     * @dev	    Explain to a developer any extra details	contract, interface, function
-     * @param	recipient - address of which to allocate the amount sent to allowing withdrawal later.
-     * @return  
-    returns True indicating success
+     * @notice	Function used to deposit funds that can be withdrawn by recipient at later time
+     * @dev	    Max limit of 2^64 active accounts allowed, 
+     *          onlyInitialsed stops unintialised contracts depositing
+     * @param	recipient - address of which to allocate the amount sent to, allowing withdrawal later.
+     * @return  returns True indicating success
      */
     function deposit(address recipient) 
     public payable onlyInitialised() 
@@ -134,6 +155,12 @@ contract DEH {
         return true;
     }
     
+    /*
+     * @notice	Used to initialise the DEH and the Validator service with the ruleSet
+     * @dev	    Valiadtor.initialise can only be called from DEH
+     * @param	Addresses of the chosen Validator Service and Rule Set 
+     * @return  returns True indicating success
+     */
     function initialise(address validatorServiceAddress, address ruleSetAddress) 
     public 
     returns(bool) {
@@ -146,6 +173,12 @@ contract DEH {
         return true;
     }
 
+    /*
+     * @notice	Used by validators to vote on delaying a chosen contract.
+     * @dev	    Modifier checks that msg.sender is infact a validator
+     * @param	contratAddress - Address of the smart contract the delay vote is for
+     * @return  returns True indicating success, False indicating delay in progress.
+     */
     function delayPayments(address contractAddress) 
     public onlyValidators(contractAddress) 
     returns(bool) {
@@ -173,6 +206,13 @@ contract DEH {
         return true;
     }
     
+    /*
+     * @notice	Used by application smart contracts to cancel a payment to a address
+     * @dev	    Divergence depending on whether cancellation time is within default
+     *          delay period of validator extended delay period. 
+     * @param	recipient - the address to cancel payments for.
+     * @return  returns True indicating success, False indicating other failure.
+     */
     function cancelPayment(address recipient) 
     public 
     returns(bool) {
@@ -199,6 +239,12 @@ contract DEH {
         return true;
     }
 
+    /*
+     * @notice	Used internally to derive the amount of time to payments are delayed
+     *          for a given smart contract (including any validator delays).
+     * @param	contractAddress - address to determine delay period for
+     * @return  returns the amount of time payments must be delayed by from the deposit time.
+     */
     function checkTimeWindow(address contractAddress) 
     private 
     returns(uint64) {
@@ -211,6 +257,12 @@ contract DEH {
         return tempSCDelay.period;
     }
     
+    /*
+     * @notice	Used internally to remove accounts from pendingAddresses array
+     * @dev	    Can end up costing more gas.. so optimisation needed
+     * @param	Addresses of the smart contract, and account to delete
+     * @return  returns True indicating success
+     */
     function emptyAccount(address contractAddress, address recipient) 
     private 
     returns(bool) {

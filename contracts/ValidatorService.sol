@@ -21,11 +21,17 @@ contract ValidatorService {
     modifier onlyDEH() { require(msg.sender == dehAddress, "This can only be done from the DEH."); _; }
     modifier onlyValidator() { require(isValidator(msg.sender) == true, "Must be a validator to do this."); _; }
     
+    /*
+    * @dev      Must have DEH address when deploying a ValidatorService
+    */
     constructor(address _dehAddress) public { 
         require(address(0) != _dehAddress, "Must provide DEH address"); 
         dehAddress = _dehAddress; 
     } 
     
+    /*
+     * @dev	    Only function signatures - expected to be implemented by children contracts     
+     */
     function initialise(address scAddress, uint64 validatorServiceParam, uint64 rewardPercent) public onlyDEH;
     function isValidator(address validator) public view returns (bool) { return validators[validator]; }
     function submitVote(address scAddress, address validator) public returns (bool);

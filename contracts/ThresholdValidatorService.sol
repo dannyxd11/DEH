@@ -4,7 +4,8 @@ import "./SafeMath.sol";
 import "./ValidatorService.sol";
 
 /*
-* @title	Validator service that uses a simple threshold to determine whether a contracts transactions should be delayed.
+* @title	Validator service that uses a simple threshold to determine
+*           whether a contracts transactions should be delayed.
 * @author	Dan Whitehouse - https://github.com/dannyxd11
 */
 
@@ -29,6 +30,12 @@ contract ThresholdValidatorService is ValidatorService {
     constructor(address _dehAddress) 
     public ValidatorService(_dehAddress) {}
 
+    /*
+     * @notice	Initalises rules based on the Ruleset
+     * @dev	    Only allowed to be called from DEH
+     * @param	Smart Contract Adddress, threshold of valdiators needed for delay
+     *          and reward percentage
+     */
     function initialise(address scAddress, uint64 _thresholdToDelay, uint64 _rewardPercent) 
     public onlyDEH() {
         validatorDetails[scAddress].thresholdToDelay = _thresholdToDelay;
@@ -36,6 +43,12 @@ contract ThresholdValidatorService is ValidatorService {
         emit NewContract(scAddress, _thresholdToDelay, _rewardPercent);
     }
 
+    /*
+     * @notice	Used by DEH to submit vote for a valdiator
+     * @dev	    Only allowed to be called from DEH
+     * @param	address of smart contract to vote on, and validator submitting vote
+     * @return  returns true if vote registered successfully
+     */
     function submitVote(address scAddress, address validator) 
     public onlyDEH 
     returns (bool) {        
@@ -52,6 +65,12 @@ contract ThresholdValidatorService is ValidatorService {
         }
     }
 
+    /*
+     * @notice	Resets votes collected for any expired ballot for a smart contract     
+     * @dev	    Only allowed to be called from DEH
+     * @param	address of smart contract to reset ballot for
+     * @return  returns true if ballot reset
+     */
     function resetVoters(address scAddress) 
     public  onlyDEH 
     returns (bool) {        
@@ -61,8 +80,16 @@ contract ThresholdValidatorService is ValidatorService {
             delete validatorDetails[scAddress].voters[length-1];
             validatorDetails[scAddress].voters.length = uint64(length).sub(1);
         }
+        returns true;
     }
 
+    /*
+     * @notice	Used by DEH to start a vote if no delay is present 
+     *          already and vote has been recevied
+     * @dev	    Only allowed to be called from DEH
+     * @param	address of smart contract to start vote for
+     * @return  returns true if vote started
+     */
     function startOrResetVote(address scAddress) 
     public onlyDEH 
     returns (bool) {
@@ -73,6 +100,12 @@ contract ThresholdValidatorService is ValidatorService {
         return true;
     }
 
+    /*
+     * @notice	Used by DEH to determine if contract transactions should be delayed
+     * @dev	    Only allowed to be called from DEH
+     * @param	address of smart contract to check
+     * @return  returns delay id if delayed, or -1 if no delay
+     */
     function isDelayed(address scAddress) 
     public onlyDEH 
     returns (int128) {            
@@ -82,8 +115,14 @@ contract ThresholdValidatorService is ValidatorService {
             return delayId;
         }
         return -1;        
-    }    
+    }  
 
+    /*
+     * @notice	Used to allocate a reward to a set of validators
+     * @dev	    Only allowed to be called from DEH
+     * @param	delay ID identifying the group of validators triggering the delay  
+     * @return  returns true if recived successfully.
+     */
     function cancellationReward(int _delayId) 
     public onlyDEH payable 
     returns (bool) {
@@ -97,6 +136,10 @@ contract ThresholdValidatorService is ValidatorService {
         return true;
     }
 
+    /*
+     * @notice	Used to claim validator rewards             
+     * @return  returns true if value sent to validator successfully
+     */
     function withdrawRewards() 
     public onlyValidator 
     returns (bool) {
@@ -109,6 +152,12 @@ contract ThresholdValidatorService is ValidatorService {
         return false;
     }
 
+    /*
+     * @notice	Used to appoint address as validator
+     * @dev	    Only used for testing purposes.. not secure in reality
+     * @param	address of validator to appoint     
+     * @return  returns true if appinted successfully.
+     */
     function appointValidator(address validatorAddress) 
     public 
     returns (bool) {
@@ -116,6 +165,12 @@ contract ThresholdValidatorService is ValidatorService {
         return true;
     }
 
+    /*
+     * @notice	Used to remove validator from service
+     * @dev	    Only used for testing purposes.. not secure in reality
+     * @param	address of validator to revoke     
+     * @return  returns true if removed successfully.
+     */
     function revokeValidator(address validatorAddress) 
     public 
     returns (bool) {

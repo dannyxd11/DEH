@@ -2,4 +2,8 @@ build/*
 node_modules/*
 package-lock.json
 package.json
+.soliumrc.json
+.soliumignore
+.solhintignore
+.solhint.json
 \.DS_Store

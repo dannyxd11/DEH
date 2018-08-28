@@ -23,12 +23,20 @@ contract Coin is MoneyControl {
 
     modifier onlyOld() {require(msg.sender == oldCoin, "Only accesible from old coin"); _;}   
 
+    /*
+     * @notice	Used to initialise the DEH with the Validator Service and Rule Set          
+     */
     constructor(address _dehAddress, address _validatorService, address _ruleSet)  
     public
     MoneyControl(_dehAddress, _validatorService, _ruleSet) {        
         remainingsupply = TOTAL_SUPPLY;
     }
 
+    /*
+     * @notice	Allows balance updates without sending any msg.value
+     * @dev	    Uses payable modifier - msg.value is used to update balance     
+     * @returns true if balance update is successful
+     */
     function allocate(address account, uint128 amount) 
     public onlyOld 
     returns (bool) {
@@ -39,6 +47,11 @@ contract Coin is MoneyControl {
         return true;
     } 
 
+    /*
+     * @notice	Buy coins and update state in contract
+     * @dev	    Uses payable modifier - msg.value is used to update balance     
+     * @returns true if balance update is successful
+     */
     function buy() 
     public payable 
     returns(bool) {
@@ -51,6 +64,12 @@ contract Coin is MoneyControl {
         return true;
     }
     
+    /*
+     * @notice	Sell the Coins the account has and send value to DEH
+     * @dev	    Uses transferViaDEH from the MoneyController
+     * @params  Amount of Coins to sell
+     * @returns true if Transfer to DEH is successful
+     */
     function sell(uint128 amountToSell) 
     public 
     returns(bool) {
@@ -61,18 +80,32 @@ contract Coin is MoneyControl {
         return transferViaDEH(msg.sender, amountToSell);                
     }
 
+     /*
+     * @notice	    Returns the remaining supply in the contract
+     * @dev	        Used as an invariant sequence
+     * @returns     Reamining supply (= TOTAL_SUPPLY - this.balance)
+     */
     function checkRemainingSupply() 
     public view 
     returns(uint128) {
         return remainingsupply;
     }
 
+    /*
+     * @notice	   Allows an account to check his balance within the contract     
+     * @returns    Account balance for msg.sender
+     */
     function checkBalance() 
     public view 
     returns(uint128) {
         return balances[msg.sender].balance;
     }
 
+    /*
+     * @notice	Transfer balance from one Coin account to another
+     * @dev	    Emits 'Sent' event
+     * @params  Has recipient and the amount to transfer
+     */
     function transfer(address receiver, uint128 amount) 
     public {
         if (balances[msg.sender].balance < amount) return;
@@ -83,6 +116,12 @@ contract Coin is MoneyControl {
         emit Sent(msg.sender, receiver, amount);
     }        
     
+    /*
+     * @notice	Recovery, transfers contract balance and updates accounts in new account
+     * @dev	    Breaks if < 50000 gas ramining to avoid revert     
+     * @param   Has addr for new contract, and signature parameters to check signature with ecrecover
+     * @return  returns True indicating successful recovery invocation
+     */
     function recover(address addr, bytes32 r, bytes32 s, uint8 v, uint nonce) 
     public recoveryInitCheck(addr, r, s, v, nonce) 
     returns(bool) {
@@ -101,9 +140,10 @@ contract Coin is MoneyControl {
         return true;
     }
 
-    /*
-     * Currently just retrievs pending payments from the DEH and suspends any future withdrawals
-     *
+     /*
+     * @notice	Failsafe, cancels all pending payments in DEH and suspends payments
+     * @dev	    Breaks if < 50000 gas ramining to avoid revert     
+     * @return  returns True indicating successful failsafe invocation
      */
     function failsafe() 
     public onlyOwner() 
@@ -117,11 +157,15 @@ contract Coin is MoneyControl {
             require(cancelPayment(addr));
             if (balances[addr].balance == 0) {balances[addr].index = uint64(activeAccounts.push(addr)).sub(1);}
             balances[addr].balance = balances[addr].balance.add(amountRefunded);            
-        }
-        // emit PaymentsCancelled(pending);
+        }        
         return true;
     }
 
+     /*
+     * @notice	Used to check the invariant sequences within the coin contract     
+     * @param	Addresses of the smart contract, and account to delete
+     * @return  returns True indicating success, or triggers failsafe
+     */
     function checkState() 
     public 
     returns (bool) {
@@ -140,6 +184,13 @@ contract Coin is MoneyControl {
         return true;
     }
     
+
+     /*
+     * @notice	Used internally to remove accounts from activeAccounts array
+     * @dev	    Can end up costing more gas.. so optimisation needed
+     * @param	Addresses of the smart contract, and account to delete
+     * @return  returns True indicating success
+     */
     function deleteAccount(address addr) 
     internal 
     returns(bool) {
